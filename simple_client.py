@@ -15,50 +15,13 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
+from jsonschema_pydantic import jsonschema_to_pydantic
 
 dotenv.load_dotenv()
 
-def create_tool_model(tool_schema: types.Tool) -> Type[BaseModel]:
-    """Create a Pydantic model from MCP tool input schema"""
-    def create_field_type(schema: dict, name: str = "") -> Type:
-        """Recursively create field type from schema"""
-        if schema.get("type") == "string":
-            return str
-        elif schema.get("type") == "integer":
-            return int 
-        elif schema.get("type") == "number":
-            return float
-        elif schema.get("type") == "boolean":
-            return bool
-        elif schema.get("type") == "array":
-            items = schema.get("items", {})
-            item_type = create_field_type(items, f"{name}Item")
-            return List[item_type]
-        elif schema.get("type") == "object":
-            nested_fields = {}
-            for prop_name, prop_schema in schema["properties"].items():
-                field_type = create_field_type(prop_schema, prop_name.title())
-                nested_fields[prop_name] = (
-                    field_type, 
-                    Field(description=prop_schema.get("description", ""))
-                )
-            return create_model(name or "NestedModel", **nested_fields)
-        return str  # Default to string type
-
-    field_definitions = {}
-    for name, field_schema in tool_schema.inputSchema["properties"].items():
-        field_type = create_field_type(field_schema, name.title())
-        field_description = field_schema.get("description", "")
-        field_definitions[name] = (field_type, Field(description=field_description))
-
-    return create_model(
-        tool_schema.inputSchema.get("title", tool_schema.name),
-        **field_definitions
-    )
-
 def create_langchain_tool(tool_schema: types.Tool, session: ClientSession, server_params: StdioServerParameters) -> Type[BaseTool]:
     """Create a LangChain tool class from MCP tool schema"""
-    input_model = create_tool_model(tool_schema)
+    input_model = jsonschema_to_pydantic(tool_schema.inputSchema)
     
     class McpConvertedLangchainTool(BaseTool):
         name: str = tool_schema.name
@@ -82,7 +45,10 @@ def create_langchain_tool(tool_schema: types.Tool, session: ClientSession, serve
             async with stdio_client(self.mcp_server_params) as (read, write):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
-                    return await session.call_tool(self.name, arguments=kwargs)
+                    r = await session.call_tool(self.name, arguments=kwargs)
+                    if r.isError:
+                        raise Exception(r.error)
+                    return r
     
     return McpConvertedLangchainTool()
 
@@ -163,8 +129,8 @@ async def run():
 
     config = {"configurable": {"thread_id": "abc123"}}
     messages = []
-    async for s in agent_executor.astream({"messages": [HumanMessage(
-        content="Navigate to google.com and take a screenshot")]}, stream_mode="values", config=config):
+    query = "Summarize https://www.youtube.com/watch?v=NExtKbS1Ljc"
+    async for s in agent_executor.astream({"messages": [HumanMessage(content=query)]}, stream_mode="values", config=config):
         message: langchain_core.messages.base.BaseMessage = s["messages"][-1]
         if message.type == "tool" and message.status == 'error':
             message.pretty_print()
