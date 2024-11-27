@@ -16,6 +16,7 @@ from langchain_core.messages import HumanMessage
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 from jsonschema_pydantic import jsonschema_to_pydantic
+import argparse
 
 dotenv.load_dotenv()
 
@@ -69,6 +70,12 @@ async def convert_mcp_to_langchain_tools(server_params: List[StdioServerParamete
     return langchain_tools
 
 async def run():
+    # Add argument parser
+    parser = argparse.ArgumentParser(description='Run LangChain agent with MCP tools')
+    parser.add_argument('query', nargs='?', default="Summarize https://www.youtube.com/watch?v=NExtKbS1Ljc",
+                       help='The query to process (default: summarize a YouTube video)')
+    args = parser.parse_args()
+
     # Create server parameters for stdio connection
     server_params = [
         StdioServerParameters(
@@ -129,7 +136,8 @@ async def run():
 
     config = {"configurable": {"thread_id": "abc123"}}
     messages = []
-    query = "Summarize https://www.youtube.com/watch?v=NExtKbS1Ljc"
+    # Use the query from command line arguments
+    query = args.query
     async for s in agent_executor.astream({"messages": [HumanMessage(content=query)]}, stream_mode="values", config=config):
         message: langchain_core.messages.base.BaseMessage = s["messages"][-1]
         if message.type == "tool" and message.status == 'error':
@@ -139,4 +147,5 @@ async def run():
 
 if __name__ == "__main__":
     import asyncio
+    
     asyncio.run(run())
