@@ -14,26 +14,43 @@ from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage
 from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 
 dotenv.load_dotenv()
 
 def create_tool_model(tool_schema: types.Tool) -> Type[BaseModel]:
     """Create a Pydantic model from MCP tool input schema"""
+    def create_field_type(schema: dict, name: str = "") -> Type:
+        """Recursively create field type from schema"""
+        if schema.get("type") == "string":
+            return str
+        elif schema.get("type") == "integer":
+            return int 
+        elif schema.get("type") == "number":
+            return float
+        elif schema.get("type") == "boolean":
+            return bool
+        elif schema.get("type") == "array":
+            items = schema.get("items", {})
+            item_type = create_field_type(items, f"{name}Item")
+            return List[item_type]
+        elif schema.get("type") == "object":
+            nested_fields = {}
+            for prop_name, prop_schema in schema["properties"].items():
+                field_type = create_field_type(prop_schema, prop_name.title())
+                nested_fields[prop_name] = (
+                    field_type, 
+                    Field(description=prop_schema.get("description", ""))
+                )
+            return create_model(name or "NestedModel", **nested_fields)
+        return str  # Default to string type
+
     field_definitions = {}
     for name, field_schema in tool_schema.inputSchema["properties"].items():
-        field_type = str  # Default to string type
-        if field_schema.get("type") == "string":
-            field_type = str
-        elif field_schema.get("type") == "integer":
-            field_type = int
-        elif field_schema.get("type") == "number":
-            field_type = float
-        elif field_schema.get("type") == "boolean":
-            field_type = bool
-            
+        field_type = create_field_type(field_schema, name.title())
         field_description = field_schema.get("description", "")
         field_definitions[name] = (field_type, Field(description=field_description))
-    
+
     return create_model(
         tool_schema.inputSchema.get("title", tool_schema.name),
         **field_definitions
@@ -72,7 +89,7 @@ def create_langchain_tool(tool_schema: types.Tool, session: ClientSession, serve
 async def convert_mcp_to_langchain_tools(server_params: List[StdioServerParameters]) -> List[BaseTool]:
     """Convert MCP tools to LangChain tools based on given server parameters"""
     langchain_tools = []
-    for server_param in server_params:      
+    for server_param in server_params:
         async with stdio_client(server_param) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
@@ -103,6 +120,29 @@ async def run():
                 "PATH": os.getenv("PATH")
             }
         ),
+        StdioServerParameters(
+            command="/usr/bin/npx",
+            args=["-y", "github:anaisbetts/mcp-youtube"],
+            env={
+                "PATH": os.getenv("PATH")
+            }
+        ),
+        # All below server are not working
+        # StdioServerParameters(
+        #     command="npx",
+        #     args=["-y", "@modelcontextprotocol/server-puppeteer"],
+        #     env={
+        #         "PATH": os.getenv("PATH"),
+        #         "DISPLAY": os.getenv("DISPLAY"),
+        #     }
+        # ),
+        # StdioServerParameters(
+        #     command="/usr/bin/npx",
+        #     args=["-y", "@modelcontextprotocol/server-memory"],
+        #     env={
+        #         "PATH": os.getenv("PATH")
+        #     }
+        # ),
         # StdioServerParameters(
         #     command="/usr/bin/npx",
         #     args=["-y", "@modelcontextprotocol/server-github"],
@@ -116,22 +156,20 @@ async def run():
     langchain_tools = await convert_mcp_to_langchain_tools(server_params)
     
     # model = ChatAnthropic(model="claude-3-haiku-20240307")
-    model = ChatAnthropic(model="claude-3-5-sonnet-latest")
+    # model = ChatAnthropic(model="claude-3-5-sonnet-latest")
+    model = ChatOpenAI(model="gpt-4o-mini")
     memory = MemorySaver()
     agent_executor = create_react_agent(model, langchain_tools, checkpointer=memory)
 
     config = {"configurable": {"thread_id": "abc123"}}
     messages = []
-    async for chunk in agent_executor.astream({"messages": [HumanMessage(
-        content="Search github repositories owned by adhikasp. What are his interest based on it?")]}, config):
-        messages.append(chunk)
-
-    for message in messages:
-        print(message)
-        # if 'agent' in message:
-        #     print(message['agent']['messages'][-1].content[0])
-        # if 'tools' in message:
-        #     print(message['tools']['messages'][-1].content)
+    async for s in agent_executor.astream({"messages": [HumanMessage(
+        content="Navigate to google.com and take a screenshot")]}, stream_mode="values", config=config):
+        message: langchain_core.messages.base.BaseMessage = s["messages"][-1]
+        if message.type == "tool" and message.status == 'error':
+            message.pretty_print()
+        else:
+            message.pretty_print()
 
 if __name__ == "__main__":
     import asyncio
