@@ -1,0 +1,117 @@
+name: Test Installation
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  test-installation:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install uv (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install uv (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          iwr -useb https://astral.sh/uv/install.ps1 | iex
+          echo "$HOME\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install uv (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Create virtual environment (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          uv venv
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+
+      - name: Create virtual environment (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          uv venv
+          echo "$PWD\.venv\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Create virtual environment (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          uv venv
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+
+      - name: Install package
+        run: |
+          uv pip install -e .
+
+      - name: Verify CLI works (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          # Run the help command and capture output
+          output=$(llm --help)
+          
+          # Check if the output contains expected help text
+          if [[ "$output" == *"Run LangChain agent with MCP tools"* ]]; then
+            echo "CLI help command works correctly"
+          else
+            echo "CLI help command failed to produce expected output"
+            echo "Actual output:"
+            echo "$output"
+            exit 1
+          fi
+
+      - name: Verify CLI works (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Run the help command and capture output
+          $output = llm --help
+          
+          # Check if the output contains expected help text
+          if ($output -match "Run LangChain agent with MCP tools") {
+            Write-Host "CLI help command works correctly"
+          } else {
+            Write-Host "CLI help command failed to produce expected output"
+            Write-Host "Actual output:"
+            Write-Host $output
+            exit 1
+          }
+
+      - name: Verify CLI works (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # Run the help command and capture output
+          output=$(llm --help)
+          
+          # Check if the output contains expected help text
+          if [[ "$output" == *"Run LangChain agent with MCP tools"* ]]; then
+            echo "CLI help command works correctly"
+          else
+            echo "CLI help command failed to produce expected output"
+            echo "Actual output:"
+            echo "$output"
+            exit 1
+          fi

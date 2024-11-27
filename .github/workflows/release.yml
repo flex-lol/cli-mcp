@@ -1,0 +1,58 @@
+name: Release to PyPI
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+
+jobs:
+  release:
+    if: contains(github.event.head_commit.message, 'release')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write  # Required for creating GitHub releases
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          uv venv
+          source .venv/bin/activate
+
+      - name: Install build dependencies
+        run: |
+          source .venv/bin/activate
+          uv pip install build twine
+
+      - name: Build package
+        run: |
+          source .venv/bin/activate
+          python -m build
+
+      - name: Get version
+        id: get_version
+        run: |
+          source .venv/bin/activate
+          uv pip install tomli
+          echo "VERSION=$(python -c 'import tomli; print(tomli.load(open("pyproject.toml", "rb"))["project"]["version"])')" >> $GITHUB_OUTPUT
+
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.get_version.outputs.VERSION }}
+          name: Release v${{ steps.get_version.outputs.VERSION }}
+          generate_release_notes: true 

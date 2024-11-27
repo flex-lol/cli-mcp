@@ -1,0 +1,52 @@
+@startuml MCP Client CLI Architecture
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Component diagram for MCP Client CLI
+
+Person(user, "User", "Software engineer using the CLI")
+
+note right of user
+    Common Usage:
+    $ llm "What is the capital of France?"
+    $ llm c "tell me more"
+    $ llm p review
+    $ cat file.txt | llm
+    $ llm --list-tools
+    $ llm --list-prompts
+end note
+
+System_Boundary(mcp_client_cli, "MCP Client CLI") {
+    Container(cli_component, "CLI Component", "Python", "Handles command-line interface and user interaction", $tags="cli")
+    
+    
+    Component(config_manager, "Config Manager", "Python", "Manages configuration loading and validation")
+    Component(output_handler, "Output Handler", "Python", "Handles output formatting and display")
+    Component(conversation_manager, "Conversation Manager", "Python", "Manages conversation persistence")
+    Component(memory_manager, "Memory Manager", "Python", "Manages user memories and vector storage")
+    Component(tool_manager, "Tool Manager", "Python", "Manages MCP tools and their conversion")
+    
+    ContainerDb(sqlite_db, "SQLite Database", "SQLite", "Stores conversations and memories")
+    ContainerDb(config_file, "Config File", "JSON", "Stores application configuration")
+}
+
+System_Ext(mcp_servers, "MCP Servers", "External MCP-compatible servers providing various tools")
+System_Ext(llm_providers, "LLM Providers", "External LLM services (OpenAI, Google, etc.)")
+
+Rel(user, cli_component, "Uses", "CLI commands")
+Rel(cli_component, config_manager, "Uses", "Loads configuration")
+Rel(cli_component, output_handler, "Uses", "Displays output")
+Rel(cli_component, conversation_manager, "Uses", "Manages conversations")
+Rel(cli_component, memory_manager, "Uses", "Accesses memories")
+Rel(cli_component, tool_manager, "Uses", "Manages tools")
+
+Rel(conversation_manager, sqlite_db, "Reads/Writes", "SQL")
+Rel(memory_manager, sqlite_db, "Reads/Writes", "SQL")
+Rel(config_manager, config_file, "Reads", "JSON")
+
+Rel(tool_manager, mcp_servers, "Connects", "MCP Protocol")
+Rel(cli_component, llm_providers, "Uses", "API calls")
+
+@enduml 
