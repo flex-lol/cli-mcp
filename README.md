@@ -1,14 +1,24 @@
-# Model Context Protocol (MCP) LangChain Integration
+# LLM CLI client
 
-This repository provides a bridge between Model Context Protocol (MCP) tools and LangChain, allowing you to use MCP-compatible tools with LangChain agents. It includes functionality for tool conversion, caching, and execution through a LangChain agent.
+A simple CLI to run LLM prompt and implement MCP client.
 
-## Features
+This repository provides a bridge between Model Context Protocol (MCP) tools and LangChain, allowing you to use MCP-compatible tools with LangChain agents.
 
-- Convert MCP tools to LangChain-compatible tools
-- Automatic tool caching to improve performance
-- Support for multiple MCP servers
-- Integration with LangChain's agent system
-- Easy-to-use command-line interface
+## Usage
+
+### Basic Usage
+
+Run the script with a query:
+
+```bash
+$ ./llm.py "What is the capital city of North Sumatra?"
+================================ Human Message =================================
+
+What is the capital city of North Sumatra?
+================================== Ai Message ==================================
+
+The capital city of North Sumatra is Medan.
+```
 
 ## Setup
 
@@ -34,21 +44,7 @@ This repository provides a bridge between Model Context Protocol (MCP) tools and
    ]
    ```
 
-## Usage
 
-### Basic Usage
-
-Run the script with a query:
-
-```bash
-$ ./llm.py "What is the capital city of North Sumatra?"
-================================ Human Message =================================
-
-What is the capital city of North Sumatra?
-================================== Ai Message ==================================
-
-The capital city of North Sumatra is Medan.
-```
 
 ### Code Structure
 
