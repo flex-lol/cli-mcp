@@ -8,7 +8,6 @@ This repository provides a bridge between Model Context Protocol (MCP) tools and
 
 ### Basic Usage
 
-Run the script with a query:
 
 ```bash
 $ ./llm.py "What is the capital city of North Sumatra?"
@@ -18,6 +17,47 @@ What is the capital city of North Sumatra?
 ================================== Ai Message ==================================
 
 The capital city of North Sumatra is Medan.
+```
+
+### Triggering a tool
+
+```bash
+$ ./llm.py "What is the top article on hackernews today?"
+================================ Human Message =================================
+
+What is the top article on hackernews today?
+================================== Ai Message ==================================
+Tool Calls:
+  brave_web_search (call_eXmFQizLUp8TKBgPtgFo71et)
+ Call ID: call_eXmFQizLUp8TKBgPtgFo71et
+  Args:
+    query: site:news.ycombinator.com
+    count: 1
+Brave Search MCP Server running on stdio
+================================= Tool Message =================================
+Name: brave_web_search
+
+[TextContent(type='text', text='Title: Hacker News\nDescription: We cannot provide a description for this page right now\nURL: https://news.ycombinator.com/')]
+================================== Ai Message ==================================
+Tool Calls:
+  fetch (call_xH32S0QKqMfudgN1ZGV6vH1P)
+ Call ID: call_xH32S0QKqMfudgN1ZGV6vH1P
+  Args:
+    url: https://news.ycombinator.com/
+================================= Tool Message =================================
+Name: fetch
+
+[TextContent(type='text', text='Contents [REDACTED]]
+================================== Ai Message ==================================
+
+The top article on Hacker News today is:
+
+### [Why pipes sometimes get "stuck": buffering](https://jvns.ca)
+- **Points:** 31
+- **Posted by:** tanelpoder
+- **Posted:** 1 hour ago
+
+You can view the full list of articles on [Hacker News](https://news.ycombinator.com/)
 ```
 
 ## Setup
@@ -43,7 +83,6 @@ The capital city of North Sumatra is Medan.
         },
    ]
    ```
-
 
 
 ### Code Structure
