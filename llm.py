@@ -10,7 +10,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Type
 
 import dotenv
 from langchain_openai import ChatOpenAI
@@ -19,6 +19,7 @@ from langchain_core.tools import BaseTool
 from langgraph.prebuilt import create_react_agent
 from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
+from pydantic import BaseModel
 from jsonschema_pydantic import jsonschema_to_pydantic
 
 CACHE_DIR = Path.home() / ".cache" / "mcp-tools"
@@ -64,7 +65,7 @@ def create_langchain_tool(
     class McpTool(BaseTool):
         name: str = tool_schema.name
         description: str = tool_schema.description
-        args_schema = input_model
+        args_schema: Type[BaseModel] = input_model
         mcp_server_params: StdioServerParameters = server_params
 
         def _run(self, **kwargs):
@@ -120,11 +121,11 @@ async def main() -> None:
             args=config.get("args", []),
             env={**config.get("env", {}), "PATH": os.getenv("PATH")}
         )
-        for config in server_config
+        for config in server_config["mcpServers"].values()
     ]
 
     langchain_tools = await convert_mcp_to_langchain_tools(server_params)
-    model = ChatOpenAI(model="gpt-4-mini")
+    model = ChatOpenAI(model="gpt-4o-mini")
     agent_executor = create_react_agent(model, langchain_tools)
     
     async for response in agent_executor.astream(

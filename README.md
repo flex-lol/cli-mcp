@@ -76,12 +76,21 @@ You can view the full list of articles on [Hacker News](https://news.ycombinator
 
 3. Create a `mcp-server-config.json` file to configure your MCP servers:
    ```json
-   [
-        {
-            "command": "uvx",
-            "args": ["mcp-server-fetch"]
-        },
-   ]
+   {
+     "mcpServers": {
+       "fetch": {
+         "command": "uvx",
+         "args": ["mcp-server-fetch"]
+       },
+       "brave-search": {
+         "command": "npx",
+         "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+         "env": {
+           "BRAVE_API_KEY": "your-brave-api-key"
+         }
+       }
+     }
+   }
    ```
 
 
