@@ -12,7 +12,6 @@ import os
 from pathlib import Path
 from typing import Annotated, Optional, List, Type, TypedDict
 
-import dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool, ToolException
@@ -24,6 +23,7 @@ from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
 from pydantic import BaseModel
 from jsonschema_pydantic import jsonschema_to_pydantic
+from langchain.chat_models import init_chat_model
 
 CACHE_DIR = Path.home() / ".cache" / "mcp-tools"
 CACHE_EXPIRY_HOURS = 24
@@ -115,8 +115,6 @@ class AgentState(TypedDict):
     today_datetime: str
 
 async def main() -> None:
-    dotenv.load_dotenv()
-    
     parser = argparse.ArgumentParser(description='Run LangChain agent with MCP tools')
     parser.add_argument('query', nargs='?', default=DEFAULT_QUERY,
                        help='The query to process (default: summarize a YouTube video)')
@@ -135,7 +133,16 @@ async def main() -> None:
     ]
 
     langchain_tools = await convert_mcp_to_langchain_tools(server_params)
-    model = ChatOpenAI(model="gpt-4o-mini")
+    
+    # Initialize the model using config
+    llm_config = server_config.get("llm", {})
+    model = init_chat_model(
+        model=llm_config.get("model", "gpt-4o"),
+        model_provider=llm_config.get("provider", "openai"),
+        api_key=llm_config.get("api_key"),
+        temperature=llm_config.get("temperature", 0)
+    )
+    
     prompt = ChatPromptTemplate.from_messages([
         ("system", server_config["systemPrompt"]),
         ("placeholder", "{messages}")
