@@ -68,15 +68,16 @@ You can view the full list of articles on [Hacker News](https://news.ycombinator
    cd mcp-exploration
    ```
 
-2. Create a `.env` file with your API keys:
-   ```env
-   OPENAI_API_KEY=your_openai_api_key
-   ANTHROPIC_API_KEY=your_anthropic_api_key
-   ```
-
-3. Create a `mcp-server-config.json` file to configure your MCP servers:
+2. Create a `mcp-server-config.json` file to configure your LLM and MCP servers:
    ```json
    {
+     "systemPrompt": "You are an AI assistant helping a software engineer...",
+     "llm": {
+       "provider": "openai",
+       "model": "gpt-4o-mini",
+       "api_key": "your-openai-api-key",
+       "temperature": 0
+     },
      "mcpServers": {
        "fetch": {
          "command": "uvx",
@@ -88,6 +89,10 @@ You can view the full list of articles on [Hacker News](https://news.ycombinator
          "env": {
            "BRAVE_API_KEY": "your-brave-api-key"
          }
+       },
+       "youtube": {
+         "command": "npx",
+         "args": ["-y", "github:anaisbetts/mcp-youtube"]
        }
      }
    }

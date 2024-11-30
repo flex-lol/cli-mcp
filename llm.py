@@ -127,7 +127,7 @@ async def main() -> None:
         StdioServerParameters(
             command=config["command"],
             args=config.get("args", []),
-            env={**config.get("env", {}), "PATH": os.getenv("PATH")}
+            env={**config.get("env", {}), "PATH": os.getenv("PATH"), "DISPLAY": os.getenv("DISPLAY")}
         )
         for config in server_config["mcpServers"].values()
     ]
