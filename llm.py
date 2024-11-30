@@ -10,13 +10,16 @@ import asyncio
 import json
 import os
 from pathlib import Path
-from typing import Optional, List, Type
+from typing import Annotated, Optional, List, Type, TypedDict
 
 import dotenv
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage
-from langchain_core.tools import BaseTool
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.tools import BaseTool, ToolException
+from langchain_core.prompts import ChatPromptTemplate
 from langgraph.prebuilt import create_react_agent
+from langgraph.managed import IsLastStep
+from langgraph.graph.message import add_messages
 from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
 from pydantic import BaseModel
@@ -76,7 +79,9 @@ def create_langchain_tool(
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     result = await session.call_tool(self.name, arguments=kwargs)
-                    return result.content if not result.isError else result.error
+                    if result.isError:
+                        raise ToolException(result.content)
+                    return result.content
     
     return McpTool()
 
@@ -104,6 +109,11 @@ async def convert_mcp_to_langchain_tools(server_params: List[StdioServerParamete
     
     return langchain_tools
 
+class AgentState(TypedDict):
+    messages: Annotated[list[BaseMessage], add_messages]
+    is_last_step: IsLastStep
+    today_datetime: str
+
 async def main() -> None:
     dotenv.load_dotenv()
     
@@ -126,10 +136,18 @@ async def main() -> None:
 
     langchain_tools = await convert_mcp_to_langchain_tools(server_params)
     model = ChatOpenAI(model="gpt-4o-mini")
-    agent_executor = create_react_agent(model, langchain_tools)
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", server_config["systemPrompt"]),
+        ("placeholder", "{messages}")
+    ])
+    agent_executor = create_react_agent(model, langchain_tools, state_schema=AgentState, state_modifier=prompt)
     
+    input_messages = {
+        "messages": [HumanMessage(content=args.query)], 
+        "today_datetime": datetime.now().isoformat(),
+    }
     async for response in agent_executor.astream(
-        {"messages": [HumanMessage(content=args.query)]},
+        input_messages,
         stream_mode="values",
         config={"configurable": {"thread_id": "abc123"}}
     ):
