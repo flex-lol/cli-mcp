@@ -64,11 +64,10 @@ You can view the full list of articles on [Hacker News](https://news.ycombinator
 
 1. Clone the repository:
    ```bash
-   git clone [repository-url]
-   cd mcp-exploration
+   pip install mcp-client-cli
    ```
 
-2. Create a `mcp-server-config.json` file to configure your LLM and MCP servers:
+2. Create a `~/.llm/config.json` file to configure your LLM and MCP servers:
    ```json
    {
      "systemPrompt": "You are an AI assistant helping a software engineer...",
@@ -96,6 +95,11 @@ You can view the full list of articles on [Hacker News](https://news.ycombinator
        }
      }
    }
+   ```
+
+3. Run the CLI:
+   ```bash
+   llm "What is the capital city of North Sumatra?"
    ```
 
 

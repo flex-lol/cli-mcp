@@ -1,7 +1,11 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
-name = "mcp-exploration"
+name = "mcp_client_cli"
 version = "0.1.0"
-description = "Add your description here"
+description = "Command line interface for MCP client"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -13,3 +17,19 @@ dependencies = [
     "langchain-openai>=0.2.10",
     "jsonschema-pydantic>=0.6",
 ]
+authors = [
+    { name = "Adhika Setya Pramudita", email = "adhika.setya.p@gmail.com" }
+]
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/adhikasp/mcp_client_cli"
+Issues = "https://github.com/adhikasp/mcp_client_cli/issues"
+
+[project.scripts]
+llm = "mcp_client_cli.cli:main"
