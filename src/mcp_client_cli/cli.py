@@ -125,6 +125,8 @@ async def run() -> None:
     
     # Join query words into a single string
     query = ' '.join(args.query) if args.query else DEFAULT_QUERY
+    if args.query[0] == "commit":
+        query = "check git status and diff. Then commit it with descriptive and concise commit msg"
 
     config_paths = [CONFIG_FILE, os.path.expanduser("~/.llm/config.json")]
     for path in config_paths:
@@ -188,7 +190,7 @@ async def run() -> None:
             print("\n", flush=True)
         elif isinstance(chunk, tuple) and chunk[0] == "values":
             message = chunk[1]['messages'][-1]
-            if isinstance(message, AIMessage) and message.tool_calls is not None:
+            if isinstance(message, AIMessage) and message.tool_calls:
                 message.pretty_print()
 
     print("")
