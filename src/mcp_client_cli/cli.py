@@ -11,9 +11,10 @@ import json
 import os
 from pathlib import Path
 from typing import Annotated, Optional, List, Type, TypedDict
+import sys
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage, AIMessageChunk
 from langchain_core.tools import BaseTool, ToolException
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.prebuilt import create_react_agent
@@ -24,6 +25,8 @@ from mcp.client.stdio import stdio_client
 from pydantic import BaseModel
 from jsonschema_pydantic import jsonschema_to_pydantic
 from langchain.chat_models import init_chat_model
+from rich import print as rprint
+from rich.panel import Panel
 
 CACHE_DIR = Path.home() / ".cache" / "mcp-tools"
 CACHE_EXPIRY_HOURS = 24
@@ -162,13 +165,33 @@ async def run() -> None:
         "messages": [HumanMessage(content=query)], 
         "today_datetime": datetime.now().isoformat(),
     }
-    async for response in agent_executor.astream(
+    async for chunk in agent_executor.astream(
         input_messages,
-        stream_mode="values",
+        stream_mode=["messages", "values"],  # Stream both messages and final values
         config={"configurable": {"thread_id": "abc123"}}
     ):
-        message = response["messages"][-1]
-        message.pretty_print()
+        # If this is a message chunk
+        if isinstance(chunk, tuple) and chunk[0] == "messages":
+            message_chunk = chunk[1][0]  # Get the message content
+            if isinstance(message_chunk, AIMessageChunk):
+                content = message_chunk.content
+                # Check if this is a tool call plan
+                if content.startswith('Action:') or content.startswith('Action Input:'):
+                    # Print tool calls in a highlighted panel
+                    rprint(Panel(content, border_style="yellow"))
+                else:
+                    # Print regular content as streaming tokens
+                    print(content, end="", flush=True)
+        # If this is a final value
+        elif isinstance(chunk, dict) and "messages" in chunk:
+            # Print a newline after the complete message
+            print("\n", flush=True)
+        elif isinstance(chunk, tuple) and chunk[0] == "values":
+            message = chunk[1]['messages'][-1]
+            if isinstance(message, AIMessage) and message.tool_calls is not None:
+                message.pretty_print()
+
+    print("")
 
 def main() -> None:
     asyncio.run(run())
