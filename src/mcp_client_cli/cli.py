@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 from typing import Annotated, Optional, List, Type, TypedDict
+import uuid
 import sys
 
 from langchain_openai import ChatOpenAI
@@ -25,13 +26,15 @@ from mcp.client.stdio import stdio_client
 from pydantic import BaseModel
 from jsonschema_pydantic import jsonschema_to_pydantic
 from langchain.chat_models import init_chat_model
-from rich import print as rprint
-from rich.panel import Panel
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+import aiosqlite
 
-CACHE_DIR = Path.home() / ".cache" / "mcp-tools"
 CACHE_EXPIRY_HOURS = 24
 DEFAULT_QUERY = "Summarize https://www.youtube.com/watch?v=NExtKbS1Ljc"
 CONFIG_FILE = 'mcp-server-config.json'
+CONFIG_DIR = Path.home() / ".llm"
+SQLITE_DB = CONFIG_DIR / "mcp-tools" / "conversations.db"
+CACHE_DIR = CONFIG_DIR / "mcp-tools"
 
 def get_cached_tools(server_param: StdioServerParameters) -> Optional[List[types.Tool]]:
     """Retrieve cached tools if available and not expired."""
@@ -117,6 +120,50 @@ class AgentState(TypedDict):
     is_last_step: IsLastStep
     today_datetime: str
 
+class ConversationManager:
+    """Manages conversation persistence in SQLite database."""
+    
+    def __init__(self, db_path: Path):
+        self.db_path = db_path
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    async def _init_db(self, db) -> None:
+        """Initialize database schema."""
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS last_conversation (
+                id INTEGER PRIMARY KEY,
+                thread_id TEXT NOT NULL
+            )
+        """)
+        await db.commit()
+    
+    async def get_last_id(self) -> str:
+        """Get the thread ID of the last conversation."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await self._init_db(db)
+            async with db.execute("SELECT thread_id FROM last_conversation LIMIT 1") as cursor:
+                row = await cursor.fetchone()
+            return row[0] if row else uuid.uuid4().hex
+    
+    async def save_id(self, thread_id: str, db = None) -> None:
+        """Save thread ID as the last conversation."""
+        if db is None:
+            async with aiosqlite.connect(self.db_path) as db:
+                await self._save_id(db, thread_id)
+        else:
+            await self._save_id(db, thread_id)
+    
+    async def _save_id(self, db, thread_id: str) -> None:
+        """Internal method to save thread ID."""
+        async with db.cursor() as cursor:
+            await self._init_db(db)
+            await cursor.execute("DELETE FROM last_conversation")
+            await cursor.execute(
+                "INSERT INTO last_conversation (thread_id) VALUES (?)", 
+                (thread_id,)
+            )
+            await db.commit()
+
 async def run() -> None:
     parser = argparse.ArgumentParser(description='Run LangChain agent with MCP tools')
     parser.add_argument('query', nargs='*', default=DEFAULT_QUERY.split(),
@@ -128,7 +175,7 @@ async def run() -> None:
     if args.query[0] == "commit":
         query = "check git status and diff. Then commit it with descriptive and concise commit msg"
 
-    config_paths = [CONFIG_FILE, os.path.expanduser("~/.llm/config.json")]
+    config_paths = [CONFIG_FILE, CONFIG_DIR / "config.json"]
     for path in config_paths:
         if os.path.exists(path):
             with open(path, 'r') as f:
@@ -161,39 +208,53 @@ async def run() -> None:
         ("system", server_config["systemPrompt"]),
         ("placeholder", "{messages}")
     ])
-    agent_executor = create_react_agent(model, langchain_tools, state_schema=AgentState, state_modifier=prompt)
-    
-    input_messages = {
-        "messages": [HumanMessage(content=query)], 
-        "today_datetime": datetime.now().isoformat(),
-    }
-    async for chunk in agent_executor.astream(
-        input_messages,
-        stream_mode=["messages", "values"],  # Stream both messages and final values
-        config={"configurable": {"thread_id": "abc123"}}
-    ):
-        # If this is a message chunk
-        if isinstance(chunk, tuple) and chunk[0] == "messages":
-            message_chunk = chunk[1][0]  # Get the message content
-            if isinstance(message_chunk, AIMessageChunk):
-                content = message_chunk.content
-                # Check if this is a tool call plan
-                if content.startswith('Action:') or content.startswith('Action Input:'):
-                    # Print tool calls in a highlighted panel
-                    rprint(Panel(content, border_style="yellow"))
-                else:
-                    # Print regular content as streaming tokens
-                    print(content, end="", flush=True)
-        # If this is a final value
-        elif isinstance(chunk, dict) and "messages" in chunk:
-            # Print a newline after the complete message
-            print("\n", flush=True)
-        elif isinstance(chunk, tuple) and chunk[0] == "values":
-            message = chunk[1]['messages'][-1]
-            if isinstance(message, AIMessage) and message.tool_calls:
-                message.pretty_print()
 
-    print("")
+    conversation_manager = ConversationManager(SQLITE_DB)
+    
+    async with AsyncSqliteSaver.from_conn_string(SQLITE_DB) as checkpointer:
+        agent_executor = create_react_agent(
+            model, 
+            langchain_tools, 
+            state_schema=AgentState, 
+            state_modifier=prompt,
+            checkpointer=checkpointer
+        )
+        
+        # Check if this is a continuation
+        is_continuation = query.startswith('c ')
+        if is_continuation:
+            query = query[2:]  # Remove 'c ' prefix
+            thread_id = await conversation_manager.get_last_id()
+        else:
+            thread_id = uuid.uuid4().hex
+        input_messages = {
+            "messages": [HumanMessage(content=query)], 
+            "today_datetime": datetime.now().isoformat(),
+        }
+        
+        async for chunk in agent_executor.astream(
+            input_messages,
+            stream_mode=["messages", "values"],
+            config={"configurable": {"thread_id": thread_id}}
+        ):
+            # If this is a message chunk
+            if isinstance(chunk, tuple) and chunk[0] == "messages":
+                message_chunk = chunk[1][0]  # Get the message content
+                if isinstance(message_chunk, AIMessageChunk):
+                    content = message_chunk.content
+                    print(content, end="", flush=True)
+            # If this is a final value
+            elif isinstance(chunk, dict) and "messages" in chunk:
+                # Print a newline after the complete message
+                print("\n", flush=True)
+            elif isinstance(chunk, tuple) and chunk[0] == "values":
+                message = chunk[1]['messages'][-1]
+                if isinstance(message, AIMessage) and message.tool_calls:
+                    message.pretty_print()
+        print("")
+
+        # Save the thread_id as the last conversation
+        await conversation_manager.save_id(thread_id, checkpointer.conn)
 
 def main() -> None:
     asyncio.run(run())

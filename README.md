@@ -8,24 +8,18 @@ This repository provides a bridge between Model Context Protocol (MCP) tools and
 
 ### Basic Usage
 
-
 ```bash
-$ ./llm.py "What is the capital city of North Sumatra?"
-================================ Human Message =================================
-
-What is the capital city of North Sumatra?
-================================== Ai Message ==================================
-
+$ llm What is the capital city of North Sumatra?
 The capital city of North Sumatra is Medan.
 ```
+
+You can omit the quotes, but be careful with bash special characters like `&`, `|`, `;` that might be interpreted by your shell.
 
 ### Triggering a tool
 
 ```bash
-$ ./llm.py "What is the top article on hackernews today?"
-================================ Human Message =================================
+$ llm What is the top article on hackernews today?
 
-What is the top article on hackernews today?
 ================================== Ai Message ==================================
 Tool Calls:
   brave_web_search (call_eXmFQizLUp8TKBgPtgFo71et)
@@ -34,10 +28,7 @@ Tool Calls:
     query: site:news.ycombinator.com
     count: 1
 Brave Search MCP Server running on stdio
-================================= Tool Message =================================
-Name: brave_web_search
 
-[TextContent(type='text', text='Title: Hacker News\nDescription: We cannot provide a description for this page right now\nURL: https://news.ycombinator.com/')]
 ================================== Ai Message ==================================
 Tool Calls:
   fetch (call_xH32S0QKqMfudgN1ZGV6vH1P)
@@ -58,6 +49,17 @@ The top article on Hacker News today is:
 - **Posted:** 1 hour ago
 
 You can view the full list of articles on [Hacker News](https://news.ycombinator.com/)
+```
+
+### Continuation
+
+Add a `c ` prefix to your message to continue the last conversation.
+
+```bash
+$ llm asldkfjasdfkl
+It seems like your message might have been a typo or an error. Could you please clarify or provide more details about what you need help with?
+$ llm c what did i say previously?
+You previously typed "asldkfjasdfkl," which appears to be a random string of characters. If you meant to ask something specific or if you have a question, please let me know!
 ```
 
 ## Setup
