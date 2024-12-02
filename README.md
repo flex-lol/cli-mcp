@@ -95,7 +95,7 @@ You previously typed "asldkfjasdfkl," which appears to be a random string of cha
        },
        "youtube": {
          "command": "npx",
-         "args": ["-y", "github:anaisbetts/mcp-youtube"]
+         "args": ["-y", "github:adhikasp/mcp-youtube"]
        }
      }
    }
