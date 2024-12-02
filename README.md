@@ -68,7 +68,7 @@ You previously typed "asldkfjasdfkl," which appears to be a random string of cha
 
 1. Clone the repository:
    ```bash
-   pip install git+https://github.com/anaisbetts/mcp-client-cli.git
+   pip install git+https://github.com/adhikasp/mcp-client-cli.git
    ```
 
 2. Create a `~/.llm/config.json` file to configure your LLM and MCP servers:
