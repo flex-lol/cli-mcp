@@ -1,8 +1,10 @@
-# LLM CLI client
+# MCP CLI client
 
-A simple CLI to run LLM prompt and implement MCP client.
+A simple CLI program to run LLM prompt and implement [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) client.
 
-This repository provides a bridge between Model Context Protocol (MCP) tools and LangChain, allowing you to use MCP-compatible tools with LangChain agents.
+You can use any [MCP-compatible servers](https://github.com/punkpeye/awesome-mcp-servers) from the convenience of your terminal.
+
+This act as alternative client beside Claude Desktop. Additionally you can use any LLM provider like OpenAI, Groq, or local LLM model via [llama](https://github.com/ggerganov/llama.cpp).
 
 ## Usage
 
@@ -77,7 +79,7 @@ You previously typed "asldkfjasdfkl," which appears to be a random string of cha
        "provider": "openai",
        "model": "gpt-4o-mini",
        "api_key": "your-openai-api-key",
-       "temperature": 0
+       "temperature": 0.7
      },
      "mcpServers": {
        "fetch": {
@@ -103,17 +105,6 @@ You previously typed "asldkfjasdfkl," which appears to be a random string of cha
    ```bash
    llm "What is the capital city of North Sumatra?"
    ```
-
-
-### Code Structure
-
-- `ToolCacheManager`: Handles caching of MCP tools
-- `McpToolConverter`: Converts MCP tools to LangChain format
-- `AgentRunner`: Manages the execution of LangChain agents
-
-## Caching
-
-Tools are cached in `~/.cache/mcp-tools/` for 24 hours to improve performance. Each server configuration has its own cache file based on its command and arguments.
 
 ## Contributing
 
