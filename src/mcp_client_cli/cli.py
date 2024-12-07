@@ -201,7 +201,8 @@ async def run() -> None:
         model=llm_config.get("model", "gpt-4o"),
         model_provider=llm_config.get("provider", "openai"),
         api_key=llm_config.get("api_key"),
-        temperature=llm_config.get("temperature", 0)
+        temperature=llm_config.get("temperature", 0),
+        base_url=llm_config.get("base_url")
     )
     
     prompt = ChatPromptTemplate.from_messages([
