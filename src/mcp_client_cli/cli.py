@@ -259,8 +259,21 @@ async def run() -> None:
             elif isinstance(chunk, tuple) and chunk[0] == "values":
                 message = chunk[1]['messages'][-1]
                 if isinstance(message, AIMessage) and message.tool_calls:
-                    print()
-                    message.pretty_print()
+                    print("\n\nTool Calls:")
+                    for tc in message.tool_calls:
+                        lines = [
+                            f"  {tc.get('name', 'Tool')}",
+                        ]
+                        if tc.get("error"):
+                            lines.append(f"  Error: {tc.get('error')}")
+                        lines.append("  Args:")
+                        args = tc.get("args")
+                        if isinstance(args, str):
+                            lines.append(f"    {args}")
+                        elif isinstance(args, dict):
+                            for arg, value in args.items():
+                                lines.append(f"    {arg}: {value}")
+                        print("\n".join(lines))
         print()
 
         # Save the thread_id as the last conversation
