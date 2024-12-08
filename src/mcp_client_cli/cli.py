@@ -166,13 +166,18 @@ class ConversationManager:
 
 async def run() -> None:
     parser = argparse.ArgumentParser(description='Run LangChain agent with MCP tools')
-    parser.add_argument('query', nargs='*', default=DEFAULT_QUERY.split(),
-                       help='The query to process (default: summarize a YouTube video)')
+    parser.add_argument('query', nargs='*', default=[],
+                       help='The query to process (default: read from stdin or use default query)')
     args = parser.parse_args()
     
-    # Join query words into a single string
-    query = ' '.join(args.query) if args.query else DEFAULT_QUERY
-    if args.query[0] == "commit":
+    # Check if there's input from stdin (pipe)
+    if not sys.stdin.isatty():
+        query = sys.stdin.read().strip()
+    else:
+        # Use command line args or default query
+        query = ' '.join(args.query) if args.query else DEFAULT_QUERY
+    
+    if args.query and args.query[0] == "commit":
         query = "check git status and diff. Then commit it with descriptive and concise commit msg"
 
     config_paths = [CONFIG_FILE, CONFIG_DIR / "config.json"]
@@ -254,8 +259,9 @@ async def run() -> None:
             elif isinstance(chunk, tuple) and chunk[0] == "values":
                 message = chunk[1]['messages'][-1]
                 if isinstance(message, AIMessage) and message.tool_calls:
+                    print()
                     message.pretty_print()
-        print("")
+        print()
 
         # Save the thread_id as the last conversation
         await conversation_manager.save_id(thread_id, checkpointer.conn)

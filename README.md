@@ -17,6 +17,16 @@ The capital city of North Sumatra is Medan.
 
 You can omit the quotes, but be careful with bash special characters like `&`, `|`, `;` that might be interpreted by your shell.
 
+You can also pipe input from other commands or files:
+
+```bash
+$ echo "What is the capital city of North Sumatra?" | llm
+The capital city of North Sumatra is Medan.
+
+$ cat instructions.txt | llm
+The capital city of North Sumatra is Medan.
+```
+
 ### Triggering a tool
 
 ```bash
