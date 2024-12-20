@@ -133,16 +133,20 @@ async def convert_mcp_to_langchain_tools(server_params: List[StdioServerParamete
             for tool in cached_tools:
                 langchain_tools.append(create_langchain_tool(tool, server_param))
             continue
-            
-        async with stdio_client(server_param) as (read, write):
-            async with ClientSession(read, write) as session:
-                print(f"Gathering capability of {server_param.command} {' '.join(server_param.args)}")
-                await session.initialize()
-                tools: types.ListToolsResult = await session.list_tools()
-                save_tools_cache(server_param, tools.tools)
-                
-                for tool in tools.tools:
-                    langchain_tools.append(create_langchain_tool(tool, server_param))
+        
+        try:
+            async with stdio_client(server_param) as (read, write):
+                async with ClientSession(read, write) as session:
+                    print(f"Gathering capability of {server_param.command} {' '.join(server_param.args)}")
+                    await session.initialize()
+                    tools: types.ListToolsResult = await session.list_tools()
+                    save_tools_cache(server_param, tools.tools)
+                    
+                    for tool in tools.tools:
+                        langchain_tools.append(create_langchain_tool(tool, server_param))
+        except Exception as e:
+            print(f"Error gathering tools for {server_param.command} {' '.join(server_param.args)}: {e}")
+            continue
     
     return langchain_tools
 
@@ -259,6 +263,7 @@ async def run() -> None:
             env={**config.get("env", {}), **os.environ}
         )
         for config in server_config["mcpServers"].values()
+        if config.get("enabled", True) is not False
     ]
 
     # LangChain tools conversion
