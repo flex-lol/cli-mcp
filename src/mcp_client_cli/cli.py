@@ -178,20 +178,25 @@ def parse_chunk(chunk: any, md: str) -> str:
     elif isinstance(chunk, tuple) and chunk[0] == "values":
         message = chunk[1]['messages'][-1]
         if isinstance(message, AIMessage) and message.tool_calls:
-            md += "\n\n## Tool Calls:"
+            md += "\n\n### Tool Calls:"
             for tc in message.tool_calls:
                 lines = [
                     f"  {tc.get('name', 'Tool')}",
                 ]
                 if tc.get("error"):
-                    lines.append(f"\n  Error: {tc.get('error')}")
-                lines.append("  Args:")
+                    lines.append(f"```")
+                    lines.append(f"Error: {tc.get('error')}")
+                    lines.append("```")
+
+                lines.append("Args:")
+                lines.append("```")
                 args = tc.get("args")
                 if isinstance(args, str):
-                    lines.append(f"\n    {args}")
+                    lines.append(f"{args}")
                 elif isinstance(args, dict):
                     for arg, value in args.items():
-                        lines.append(f"\n    {arg}: {value}")
+                        lines.append(f"{arg}: {value}")
+                lines.append("```")
                 md += "\n".join(lines)
         md += "\n"
     return md
