@@ -36,9 +36,14 @@ class AgentState(TypedDict):
 
 
 async def run() -> None:
-    """Run the LangChain agent with MCP tools.
-    
+    """
+    Run the LLM agent.
     This function initializes the agent, loads the configuration, and processes the query.
+
+    We mainly rely on ReAct agent to do tool calling. See here for more detail on how the agent works:
+    https://langchain-ai.github.io/langgraph/how-tos/create-react-agent/
+
+    We convert MCP tools to LangChain tools and pass it to the agent.    
     """
     # Argument parsing and query determination
     parser = argparse.ArgumentParser(description='Run LangChain agent with MCP tools')
