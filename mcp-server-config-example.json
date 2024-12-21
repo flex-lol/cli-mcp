@@ -21,6 +21,14 @@
     "youtube": {
       "command": "npx",
       "args": ["-y", "github:anaisbetts/mcp-youtube"]
+    },
+    "mcp-server-commands": {
+      "command": "npx",
+      "args": ["mcp-server-commands"],
+      "requires_confirmation": [
+        "run_command",
+        "run_script"
+      ]
     }
   }
 }

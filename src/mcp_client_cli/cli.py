@@ -23,6 +23,8 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from rich.console import Console, ConsoleDimensions
 from rich.live import Live
 from rich.markdown import Markdown
+from rich.prompt import Confirm
+from rich.table import Table
 
 from .const import *
 from .storage import *
@@ -52,6 +54,8 @@ async def run() -> None:
     parser = argparse.ArgumentParser(description='Run LangChain agent with MCP tools')
     parser.add_argument('query', nargs='*', default=[],
                        help='The query to process (default: read from stdin or use default query)')
+    parser.add_argument('--list-tools', action='store_true',
+                       help='List all available LLM tools')
     args = parser.parse_args()
     
     # Check if there's input from stdin (pipe)
@@ -66,7 +70,20 @@ async def run() -> None:
 
     # LangChain tools conversion
     langchain_tools = await convert_mcp_to_langchain_tools(server_params)
-    
+
+    # Handle --list-tools argument
+    if args.list_tools:
+        console = Console()
+        table = Table(title="Available LLM Tools")
+        table.add_column("Tool Name", style="cyan")
+        table.add_column("Description", style="green")
+
+        for tool in langchain_tools:
+            table.add_row(tool.name, tool.description)
+
+        console.print(table)
+        return
+
     # Model initialization
     llm_config = server_config.get("llm", {})
     model = init_chat_model(
@@ -110,8 +127,8 @@ async def run() -> None:
         }
         # Message streaming and tool calls handling
         console = Console()
-        md = ""
-        with Live(Markdown(""), console=console, vertical_overflow="visible", screen=True) as live:
+        md = "Thinking...\n"
+        with Live(Markdown(md), vertical_overflow="visible", screen=True) as live:
             async for chunk in agent_executor.astream(
                 input_messages,
                 stream_mode=["messages", "values"],
@@ -120,6 +137,14 @@ async def run() -> None:
                 md = parse_chunk(chunk, md)
                 partial_md = truncate_md_to_fit(md, console.size)
                 live.update(Markdown(partial_md), refresh=True)
+
+                if is_tool_call_requested(chunk, server_config):
+                    live.stop()
+                    is_confirmed = ask_tool_call_confirmation(md, console)
+                    if not is_confirmed:
+                        md += "# Tool call denied"
+                        break
+                    live.start()
 
         console.clear()
         console.print("\n")
@@ -131,12 +156,20 @@ async def run() -> None:
 
 def load_config() -> dict:
     config_paths = [CONFIG_FILE, CONFIG_DIR / "config.json"]
+    choosen_path = None
     for path in config_paths:
         if os.path.exists(path):
-            with open(path, 'r') as f:
-                return json.load(f)
-    else:
+            choosen_path = path
+    if choosen_path is None:
         raise FileNotFoundError(f"Could not find config file in any of: {', '.join(config_paths)}")
+
+    with open(choosen_path, 'r') as f:
+        config = json.load(f)
+        tools_requires_confirmation = []
+        for tool in config["mcpServers"]:
+            tools_requires_confirmation.extend(config["mcpServers"][tool].get("requires_confirmation", []))
+        config["tools_requires_confirmation"] = tools_requires_confirmation
+        return config
 
 def load_mcp_server_config(server_config: dict) -> dict:
     """
@@ -232,6 +265,32 @@ def truncate_md_to_fit(md: str, dimensions: ConsoleDimensions) -> str:
         return partial_md
 
     return md
+
+def is_tool_call_requested(chunk: any, config: dict) -> bool:
+    """
+    Check if the chunk contains a tool call request and requires confirmation.
+    """
+    if isinstance(chunk, tuple) and chunk[0] == "values":
+        if len(chunk) > 1 and isinstance(chunk[1], dict) and "messages" in chunk[1]:
+            message = chunk[1]['messages'][-1]
+            if isinstance(message, AIMessage) and message.tool_calls:
+                for tc in message.tool_calls:
+                    if tc.get("name") in config["tools_requires_confirmation"]:
+                        return True
+    return False
+
+def ask_tool_call_confirmation(md: str, console: Console) -> bool:
+    """
+    Ask the user for confirmation to run a tool call.
+    """
+    console.set_alt_screen(True)
+    console.print(Markdown(md))
+    console.print(f"\n\n")
+    is_tool_call_confirmed = Confirm.ask(f"Confirm tool call?", console=console)
+    console.set_alt_screen(False)
+    if not is_tool_call_confirmed:
+        return False
+    return True
 
 def main() -> None:
     """Entry point of the script."""
