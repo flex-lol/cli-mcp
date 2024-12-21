@@ -52,30 +52,9 @@ async def run() -> None:
     else:
         # Use command line args or default query
         query = ' '.join(args.query) if args.query else DEFAULT_QUERY
-    
-    if args.query and args.query[0] == "commit":
-        query = "check git status and diff. Then commit it with descriptive and concise commit msg"
 
-    # Configuration file loading
-    config_paths = [CONFIG_FILE, CONFIG_DIR / "config.json"]
-    for path in config_paths:
-        if os.path.exists(path):
-            with open(path, 'r') as f:
-                server_config = json.load(f)
-            break
-    else:
-        raise FileNotFoundError(f"Could not find config file in any of: {', '.join(config_paths)}")
-    
-    # Server parameters initialization
-    server_params = [
-        StdioServerParameters(
-            command=config["command"],
-            args=config.get("args", []),
-            env={**config.get("env", {}), **os.environ}
-        )
-        for config in server_config["mcpServers"].values()
-        if config.get("enabled", True) is not False
-    ]
+    server_config = load_config()
+    server_params = load_mcp_server_config(server_config)
 
     # LangChain tools conversion
     langchain_tools = await convert_mcp_to_langchain_tools(server_params)
@@ -116,53 +95,88 @@ async def run() -> None:
             thread_id = await conversation_manager.get_last_id()
         else:
             thread_id = uuid.uuid4().hex
+
         input_messages = {
             "messages": [HumanMessage(content=query)], 
             "today_datetime": datetime.now().isoformat(),
         }
-        
         # Message streaming and tool calls handling
         async for chunk in agent_executor.astream(
             input_messages,
             stream_mode=["messages", "values"],
             config={"configurable": {"thread_id": thread_id}}
         ):
-            # If this is a message chunk
-            if isinstance(chunk, tuple) and chunk[0] == "messages":
-                message_chunk = chunk[1][0]  # Get the message content
-                if isinstance(message_chunk, AIMessageChunk):
-                    content = message_chunk.content
-                    if isinstance(content, str):
-                        print(content, end="", flush=True)
-                    elif isinstance(content, list) and len(content) > 0 and isinstance(content[0], dict) and "text" in content[0]:
-                        print(content[0]["text"], end="", flush=True)
-            # If this is a final value
-            elif isinstance(chunk, dict) and "messages" in chunk:
-                # Print a newline after the complete message
-                print("\n", flush=True)
-            elif isinstance(chunk, tuple) and chunk[0] == "values":
-                message = chunk[1]['messages'][-1]
-                if isinstance(message, AIMessage) and message.tool_calls:
-                    print("\n\nTool Calls:")
-                    for tc in message.tool_calls:
-                        lines = [
-                            f"  {tc.get('name', 'Tool')}",
-                        ]
-                        if tc.get("error"):
-                            lines.append(f"  Error: {tc.get('error')}")
-                        lines.append("  Args:")
-                        args = tc.get("args")
-                        if isinstance(args, str):
-                            lines.append(f"    {args}")
-                        elif isinstance(args, dict):
-                            for arg, value in args.items():
-                                lines.append(f"    {arg}: {value}")
-                        print("\n".join(lines))
-        print()
+            print_chunk(chunk)
 
         # Saving the last conversation thread ID
         await conversation_manager.save_id(thread_id, checkpointer.conn)
 
+def load_config() -> dict:
+    config_paths = [CONFIG_FILE, CONFIG_DIR / "config.json"]
+    for path in config_paths:
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                return json.load(f)
+    else:
+        raise FileNotFoundError(f"Could not find config file in any of: {', '.join(config_paths)}")
+
+def load_mcp_server_config(server_config: dict) -> dict:
+    """
+    Load the MCP server configuration from key "mcpServers" in the config file.
+    """
+    server_params = []
+    for config in server_config["mcpServers"].values():
+        enabled = config.get("enabled", True)
+        if not enabled:
+            continue
+
+        server_params.append(
+            StdioServerParameters(
+                command=config["command"],
+                args=config.get("args", []),
+                env={**config.get("env", {}), **os.environ}
+                )
+            )
+    return server_params
+
+def print_chunk(chunk: any) -> None:
+    """
+    Print the chunk of agent response to the console.
+    It will stream the response to the console as it is received.
+    """
+
+    # If this is a message chunk
+    if isinstance(chunk, tuple) and chunk[0] == "messages":
+        message_chunk = chunk[1][0]  # Get the message content
+        if isinstance(message_chunk, AIMessageChunk):
+            content = message_chunk.content
+            if isinstance(content, str):
+                print(content, end="", flush=True)
+            elif isinstance(content, list) and len(content) > 0 and isinstance(content[0], dict) and "text" in content[0]:
+                print(content[0]["text"], end="", flush=True)
+    # If this is a final value
+    elif isinstance(chunk, dict) and "messages" in chunk:
+        # Print a newline after the complete message
+        print("\n", flush=True)
+    elif isinstance(chunk, tuple) and chunk[0] == "values":
+        message = chunk[1]['messages'][-1]
+        if isinstance(message, AIMessage) and message.tool_calls:
+            print("\n\nTool Calls:")
+            for tc in message.tool_calls:
+                lines = [
+                    f"  {tc.get('name', 'Tool')}",
+                ]
+                if tc.get("error"):
+                    lines.append(f"  Error: {tc.get('error')}")
+                lines.append("  Args:")
+                args = tc.get("args")
+                if isinstance(args, str):
+                    lines.append(f"    {args}")
+                elif isinstance(args, dict):
+                    for arg, value in args.items():
+                        lines.append(f"    {arg}: {value}")
+                print("\n".join(lines))
+    print()
 
 def main() -> None:
     """Entry point of the script."""
