@@ -2,9 +2,8 @@ from typing import List, Type
 from pydantic import BaseModel
 from langchain_core.tools import BaseTool, ToolException
 from jsonschema_pydantic import jsonschema_to_pydantic
-from mcp import StdioServerParameters, types
+from mcp import StdioServerParameters, types, ClientSession
 from mcp.client.stdio import stdio_client
-from aiohttp import ClientSession
 
 from .storage import *
 
