@@ -56,10 +56,13 @@ async def run() -> None:
                        help='The query to process (default: read from stdin or use default query)')
     parser.add_argument('--list-tools', action='store_true',
                        help='List all available LLM tools')
+    parser.add_argument('--no-confirmations', action='store_true',
+                       help='Bypass tool confirmation requirements')
+
     args = parser.parse_args()
-    
+
     # Check if there's input from stdin (pipe)
-    if not sys.stdin.isatty():
+    if not sys.stdin.isatty() and not args.query:
         query = sys.stdin.read().strip()
     else:
         # Use command line args or default query
@@ -138,7 +141,7 @@ async def run() -> None:
                 partial_md = truncate_md_to_fit(md, console.size)
                 live.update(Markdown(partial_md), refresh=True)
 
-                if is_tool_call_requested(chunk, server_config):
+                if not args.no_confirmations and is_tool_call_requested(chunk, server_config):
                     live.stop()
                     is_confirmed = ask_tool_call_confirmation(md, console)
                     if not is_confirmed:
