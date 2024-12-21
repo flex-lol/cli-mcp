@@ -144,7 +144,6 @@ def print_chunk(chunk: any) -> None:
     Print the chunk of agent response to the console.
     It will stream the response to the console as it is received.
     """
-
     # If this is a message chunk
     if isinstance(chunk, tuple) and chunk[0] == "messages":
         message_chunk = chunk[1][0]  # Get the message content
@@ -176,7 +175,7 @@ def print_chunk(chunk: any) -> None:
                     for arg, value in args.items():
                         lines.append(f"    {arg}: {value}")
                 print("\n".join(lines))
-    print()
+        print()
 
 def main() -> None:
     """Entry point of the script."""
