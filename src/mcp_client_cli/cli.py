@@ -20,6 +20,9 @@ from langgraph.managed import IsLastStep
 from langgraph.graph.message import add_messages
 from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from rich.console import Console, ConsoleDimensions
+from rich.live import Live
+from rich.markdown import Markdown
 
 from .const import *
 from .storage import *
@@ -106,12 +109,22 @@ async def run() -> None:
             "today_datetime": datetime.now().isoformat(),
         }
         # Message streaming and tool calls handling
-        async for chunk in agent_executor.astream(
-            input_messages,
-            stream_mode=["messages", "values"],
-            config={"configurable": {"thread_id": thread_id}}
-        ):
-            print_chunk(chunk)
+        console = Console()
+        md = ""
+        with Live(Markdown(""), console=console, vertical_overflow="visible", screen=True) as live:
+            async for chunk in agent_executor.astream(
+                input_messages,
+                stream_mode=["messages", "values"],
+                config={"configurable": {"thread_id": thread_id}}
+            ):
+                md = parse_chunk(chunk, md)
+                partial_md = truncate_md_to_fit(md, console.size)
+                live.update(Markdown(partial_md), refresh=True)
+
+        console.clear()
+        console.print("\n")
+        console.print(Markdown(md))
+        console.print("\n\n")
 
         # Saving the last conversation thread ID
         await conversation_manager.save_id(thread_id, checkpointer.conn)
@@ -144,7 +157,7 @@ def load_mcp_server_config(server_config: dict) -> dict:
             )
     return server_params
 
-def print_chunk(chunk: any) -> None:
+def parse_chunk(chunk: any, md: str) -> str:
     """
     Print the chunk of agent response to the console.
     It will stream the response to the console as it is received.
@@ -155,32 +168,65 @@ def print_chunk(chunk: any) -> None:
         if isinstance(message_chunk, AIMessageChunk):
             content = message_chunk.content
             if isinstance(content, str):
-                print(content, end="", flush=True)
+                md += content
             elif isinstance(content, list) and len(content) > 0 and isinstance(content[0], dict) and "text" in content[0]:
-                print(content[0]["text"], end="", flush=True)
+                md += content[0]["text"]
     # If this is a final value
     elif isinstance(chunk, dict) and "messages" in chunk:
         # Print a newline after the complete message
-        print("\n", flush=True)
+        md += "\n"
     elif isinstance(chunk, tuple) and chunk[0] == "values":
         message = chunk[1]['messages'][-1]
         if isinstance(message, AIMessage) and message.tool_calls:
-            print("\n\nTool Calls:")
+            md += "\n\n## Tool Calls:"
             for tc in message.tool_calls:
                 lines = [
                     f"  {tc.get('name', 'Tool')}",
                 ]
                 if tc.get("error"):
-                    lines.append(f"  Error: {tc.get('error')}")
+                    lines.append(f"\n  Error: {tc.get('error')}")
                 lines.append("  Args:")
                 args = tc.get("args")
                 if isinstance(args, str):
-                    lines.append(f"    {args}")
+                    lines.append(f"\n    {args}")
                 elif isinstance(args, dict):
                     for arg, value in args.items():
-                        lines.append(f"    {arg}: {value}")
-                print("\n".join(lines))
-        print()
+                        lines.append(f"\n    {arg}: {value}")
+                md += "\n".join(lines)
+        md += "\n"
+    return md
+
+def truncate_md_to_fit(md: str, dimensions: ConsoleDimensions) -> str:
+    """
+    Truncate the markdown to fit the console size.
+    """
+    total_lines = 0
+    for line in md.splitlines():
+        # Add 1 for the line itself
+        line_count = 1
+        # Add extra lines needed for wrapping
+        if len(line) > dimensions.width - 10:
+            line_count += len(line) // (dimensions.width - 10)
+        total_lines += line_count
+    
+    if total_lines > dimensions.height:
+        # Split into lines and take last N lines that will fit
+        lines = md.splitlines()
+        fitted_lines = []
+        current_height = 0
+
+        # Work backwards through lines
+        for line in reversed(lines):
+            line_height = 1 + (len(line) // dimensions.width)
+            if current_height + line_height > dimensions.height:
+                break
+            fitted_lines.insert(0, line)
+            current_height += line_height
+            
+        partial_md = '\n'.join(fitted_lines)
+        return partial_md
+
+    return md
 
 def main() -> None:
     """Entry point of the script."""
