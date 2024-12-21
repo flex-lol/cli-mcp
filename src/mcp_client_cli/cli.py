@@ -4,152 +4,26 @@
 Simple llm CLI that acts as MCP client.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 import argparse
 import asyncio
 import json
 import os
-from pathlib import Path
-from typing import Annotated, Optional, List, Type, TypedDict
+from typing import Annotated, TypedDict
 import uuid
 import sys
 
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage, AIMessageChunk
-from langchain_core.tools import BaseTool, ToolException
+from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, AIMessageChunk
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.prebuilt import create_react_agent
 from langgraph.managed import IsLastStep
 from langgraph.graph.message import add_messages
-from mcp import ClientSession, StdioServerParameters, types
-from mcp.client.stdio import stdio_client
-from pydantic import BaseModel
-from jsonschema_pydantic import jsonschema_to_pydantic
 from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-import aiosqlite
 
-CACHE_EXPIRY_HOURS = 24
-DEFAULT_QUERY = "Summarize https://www.youtube.com/watch?v=NExtKbS1Ljc"
-CONFIG_FILE = 'mcp-server-config.json'
-CONFIG_DIR = Path.home() / ".llm"
-SQLITE_DB = CONFIG_DIR / "conversations.db"
-CACHE_DIR = CONFIG_DIR / "mcp-tools"
-
-
-def get_cached_tools(server_param: StdioServerParameters) -> Optional[List[types.Tool]]:
-    """Retrieve cached tools if available and not expired.
-    
-    Args:
-        server_param (StdioServerParameters): The server parameters to identify the cache.
-    
-    Returns:
-        Optional[List[types.Tool]]: A list of tools if cache is available and not expired, otherwise None.
-    """
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache_key = f"{server_param.command}-{'-'.join(server_param.args)}".replace("/", "-")
-    cache_file = CACHE_DIR / f"{cache_key}.json"
-    
-    if not cache_file.exists():
-        return None
-        
-    cache_data = json.loads(cache_file.read_text())
-    cached_time = datetime.fromisoformat(cache_data["cached_at"])
-    
-    if datetime.now() - cached_time > timedelta(hours=CACHE_EXPIRY_HOURS):
-        return None
-            
-    return [types.Tool(**tool) for tool in cache_data["tools"]]
-
-
-def save_tools_cache(server_param: StdioServerParameters, tools: List[types.Tool]) -> None:
-    """Save tools to cache.
-    
-    Args:
-        server_param (StdioServerParameters): The server parameters to identify the cache.
-        tools (List[types.Tool]): The list of tools to be cached.
-    """
-    cache_key = f"{server_param.command}-{'-'.join(server_param.args)}".replace("/", "-")
-    cache_file = CACHE_DIR / f"{cache_key}.json"
-    
-    cache_data = {
-        "cached_at": datetime.now().isoformat(),
-        "tools": [tool.model_dump() for tool in tools]
-    }
-    cache_file.write_text(json.dumps(cache_data))
-
-
-def create_langchain_tool(
-    tool_schema: types.Tool,
-    server_params: StdioServerParameters
-) -> BaseTool:
-    """Create a LangChain tool from MCP tool schema.
-    
-    Args:
-        tool_schema (types.Tool): The MCP tool schema.
-        server_params (StdioServerParameters): The server parameters for the tool.
-    
-    Returns:
-        BaseTool: The created LangChain tool.
-    """
-    input_model = jsonschema_to_pydantic(tool_schema.inputSchema)
-    
-    class McpTool(BaseTool):
-        name: str = tool_schema.name
-        description: str = tool_schema.description
-        args_schema: Type[BaseModel] = input_model
-        mcp_server_params: StdioServerParameters = server_params
-
-        def _run(self, **kwargs):
-            raise NotImplementedError("Only async operations are supported")
-
-        async def _arun(self, **kwargs):
-            async with stdio_client(self.mcp_server_params) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    result = await session.call_tool(self.name, arguments=kwargs)
-                    if result.isError:
-                        raise ToolException(result.content)
-                    return result.content
-    
-    return McpTool()
-
-
-async def convert_mcp_to_langchain_tools(server_params: List[StdioServerParameters]) -> List[BaseTool]:
-    """Convert MCP tools to LangChain tools.
-    
-    Args:
-        server_params (List[StdioServerParameters]): A list of server parameters for MCP tools.
-    
-    Returns:
-        List[BaseTool]: A list of converted LangChain tools.
-    """
-    langchain_tools = []
-    
-    for server_param in server_params:
-        cached_tools = get_cached_tools(server_param)
-        
-        if cached_tools:
-            for tool in cached_tools:
-                langchain_tools.append(create_langchain_tool(tool, server_param))
-            continue
-        
-        try:
-            async with stdio_client(server_param) as (read, write):
-                async with ClientSession(read, write) as session:
-                    print(f"Gathering capability of {server_param.command} {' '.join(server_param.args)}")
-                    await session.initialize()
-                    tools: types.ListToolsResult = await session.list_tools()
-                    save_tools_cache(server_param, tools.tools)
-                    
-                    for tool in tools.tools:
-                        langchain_tools.append(create_langchain_tool(tool, server_param))
-        except Exception as e:
-            print(f"Error gathering tools for {server_param.command} {' '.join(server_param.args)}: {e}")
-            continue
-    
-    return langchain_tools
-
+from .const import *
+from .storage import *
+from .tool import *
 
 # The AgentState class is used to maintain the state of the agent during a conversation.
 class AgentState(TypedDict):
@@ -159,69 +33,6 @@ class AgentState(TypedDict):
     is_last_step: IsLastStep
     # The current date and time, used for context in the conversation.
     today_datetime: str
-
-
-class ConversationManager:
-    """Manages conversation persistence in SQLite database."""
-    
-    def __init__(self, db_path: Path):
-        self.db_path = db_path
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    async def _init_db(self, db) -> None:
-        """Initialize database schema.
-        
-        Args:
-            db: The database connection object.
-        """
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS last_conversation (
-                id INTEGER PRIMARY KEY,
-                thread_id TEXT NOT NULL
-            )
-        """)
-        await db.commit()
-    
-    async def get_last_id(self) -> str:
-        """Get the thread ID of the last conversation.
-        
-        Returns:
-            str: The thread ID of the last conversation, or a new UUID if no conversation exists.
-        """
-        async with aiosqlite.connect(self.db_path) as db:
-            await self._init_db(db)
-            async with db.execute("SELECT thread_id FROM last_conversation LIMIT 1") as cursor:
-                row = await cursor.fetchone()
-            return row[0] if row else uuid.uuid4().hex
-    
-    async def save_id(self, thread_id: str, db = None) -> None:
-        """Save thread ID as the last conversation.
-        
-        Args:
-            thread_id (str): The thread ID to save.
-            db: The database connection object (optional).
-        """
-        if db is None:
-            async with aiosqlite.connect(self.db_path) as db:
-                await self._save_id(db, thread_id)
-        else:
-            await self._save_id(db, thread_id)
-    
-    async def _save_id(self, db, thread_id: str) -> None:
-        """Internal method to save thread ID.
-        
-        Args:
-            db: The database connection object.
-            thread_id (str): The thread ID to save.
-        """
-        async with db.cursor() as cursor:
-            await self._init_db(db)
-            await cursor.execute("DELETE FROM last_conversation")
-            await cursor.execute(
-                "INSERT INTO last_conversation (thread_id) VALUES (?)", 
-                (thread_id,)
-            )
-            await db.commit()
 
 
 async def run() -> None:
