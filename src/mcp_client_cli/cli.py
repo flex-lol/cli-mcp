@@ -135,7 +135,7 @@ async def run() -> None:
             async for chunk in agent_executor.astream(
                 input_messages,
                 stream_mode=["messages", "values"],
-                config={"configurable": {"thread_id": thread_id}}
+                config={"configurable": {"thread_id": thread_id}, "recursion_limit": 100}
             ):
                 md = parse_chunk(chunk, md)
                 partial_md = truncate_md_to_fit(md, console.size)
@@ -239,35 +239,32 @@ def parse_chunk(chunk: any, md: str) -> str:
 
 def truncate_md_to_fit(md: str, dimensions: ConsoleDimensions) -> str:
     """
-    Truncate the markdown to fit the console size.
+    Truncate the markdown to fit the console size, with few line safety margin.
     """
-    total_lines = 0
-    for line in md.splitlines():
-        # Add 1 for the line itself
-        line_count = 1
-        # Add extra lines needed for wrapping
-        if len(line) > dimensions.width - 10:
-            line_count += len(line) // (dimensions.width - 10)
-        total_lines += line_count
-    
-    if total_lines > dimensions.height:
-        # Split into lines and take last N lines that will fit
-        lines = md.splitlines()
-        fitted_lines = []
-        current_height = 0
+    lines = md.splitlines()
+    max_lines = dimensions.height - 3  # Safety margin
+    fitted_lines = []
+    current_height = 0
+    code_block_count = 0
 
-        # Work backwards through lines
-        for line in reversed(lines):
-            line_height = 1 + (len(line) // dimensions.width)
-            if current_height + line_height > dimensions.height:
-                break
-            fitted_lines.insert(0, line)
-            current_height += line_height
-            
-        partial_md = '\n'.join(fitted_lines)
-        return partial_md
+    for line in reversed(lines):
+        # Calculate wrapped line height, rounding up for safety
+        line_height = 1 + len(line) // dimensions.width
 
-    return md
+        if current_height + line_height > max_lines:
+            # If we're breaking in the middle of code blocks, add closing ```
+            if code_block_count % 2 == 1:
+                fitted_lines.insert(0, "```")
+            break
+
+        fitted_lines.insert(0, line)
+        current_height += line_height
+
+        # Track code block markers
+        if line.strip() == "```":
+            code_block_count += 1
+
+    return '\n'.join(fitted_lines) if fitted_lines else ''
 
 def is_tool_call_requested(chunk: any, config: dict) -> bool:
     """
