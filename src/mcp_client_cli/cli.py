@@ -92,7 +92,7 @@ async def run() -> None:
     model = init_chat_model(
         model=llm_config.get("model", "gpt-4o"),
         model_provider=llm_config.get("provider", "openai"),
-        api_key=llm_config.get("api_key", os.getenv("LLM_API_KEY", ""),
+        api_key=llm_config.get("api_key", os.getenv("LLM_API_KEY", "")),
         temperature=llm_config.get("temperature", 0),
         base_url=llm_config.get("base_url")
     )
