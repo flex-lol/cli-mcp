@@ -7,12 +7,12 @@ Simple llm CLI that acts as MCP client.
 from datetime import datetime
 import argparse
 import asyncio
-import json
 import os
 from typing import Annotated, TypedDict
 import uuid
 import sys
 
+import commentjson
 from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, AIMessageChunk
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.prebuilt import create_react_agent
@@ -167,7 +167,7 @@ def load_config() -> dict:
         raise FileNotFoundError(f"Could not find config file in any of: {', '.join(config_paths)}")
 
     with open(choosen_path, 'r') as f:
-        config = json.load(f)
+        config = commentjson.load(f)
         tools_requires_confirmation = []
         for tool in config["mcpServers"]:
             tools_requires_confirmation.extend(config["mcpServers"][tool].get("requires_confirmation", []))
