@@ -11,7 +11,7 @@ import os
 from typing import Annotated, TypedDict
 import uuid
 import sys
-
+import re
 import commentjson
 from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, AIMessageChunk
 from langchain_core.prompts import ChatPromptTemplate
@@ -29,6 +29,7 @@ from rich.table import Table
 from .const import *
 from .storage import *
 from .tool import *
+from .prompt import *
 
 # The AgentState class is used to maintain the state of the agent during a conversation.
 class AgentState(TypedDict):
@@ -50,23 +51,19 @@ async def run() -> None:
 
     We convert MCP tools to LangChain tools and pass it to the agent.    
     """
-    # Argument parsing and query determination
     parser = argparse.ArgumentParser(description='Run LangChain agent with MCP tools')
     parser.add_argument('query', nargs='*', default=[],
                        help='The query to process (default: read from stdin or use default query)')
     parser.add_argument('--list-tools', action='store_true',
                        help='List all available LLM tools')
+    parser.add_argument('--list-prompts', action='store_true',
+                       help='List all available prompts')
     parser.add_argument('--no-confirmations', action='store_true',
                        help='Bypass tool confirmation requirements')
 
     args = parser.parse_args()
 
-    # Check if there's input from stdin (pipe)
-    if not sys.stdin.isatty() and not args.query:
-        query = sys.stdin.read().strip()
-    else:
-        # Use command line args or default query
-        query = ' '.join(args.query) if args.query else DEFAULT_QUERY
+    query, is_conversation_continuation = parse_query(args)
 
     server_config = load_config()
     server_params = load_mcp_server_config(server_config)
@@ -84,6 +81,20 @@ async def run() -> None:
         for tool in langchain_tools:
             table.add_row(tool.name, tool.description)
 
+        console.print(table)
+        return
+
+    # Handle --list-prompts argument
+    if args.list_prompts:
+        console = Console()
+        table = Table(title="Available Prompt Templates")
+        table.add_column("Name", style="cyan")
+        table.add_column("Template")
+        table.add_column("Arguments")
+        
+        for name, template in prompt_templates.items():
+            table.add_row(name, template, ", ".join(re.findall(r'\{(\w+)\}', template)))
+            
         console.print(table)
         return
 
@@ -116,10 +127,7 @@ async def run() -> None:
             checkpointer=checkpointer
         )
         
-        # Query processing and continuation check
-        is_continuation = query.startswith('c ')
-        if is_continuation:
-            query = query[2:]  # Remove 'c ' prefix
+        if is_conversation_continuation:
             thread_id = await conversation_manager.get_last_id()
         else:
             thread_id = uuid.uuid4().hex
@@ -156,6 +164,47 @@ async def run() -> None:
 
         # Saving the last conversation thread ID
         await conversation_manager.save_id(thread_id, checkpointer.conn)
+
+def parse_query(args: argparse.Namespace) -> tuple[str, bool]:
+    """
+    Parse the query from command line arguments.
+    Returns a tuple of (query, is_conversation_continuation).
+    """
+    query_parts = ' '.join(args.query).split()
+
+    # No arguments provided
+    if not query_parts:
+        if not sys.stdin.isatty():
+            return sys.stdin.read().strip(), False
+        return '', False
+
+    # Check for conversation continuation
+    if query_parts[0] == 'c':
+        return ' '.join(query_parts[1:]), True
+
+    # Check for prompt template
+    if query_parts[0] == 'p' and len(query_parts) >= 2:
+        template_name = query_parts[1]
+        if template_name not in prompt_templates:
+            print(f"Error: Prompt template '{template_name}' not found.")
+            print("Available templates:", ", ".join(prompt_templates.keys()))
+            return '', False
+
+        template = prompt_templates[template_name]
+        template_args = query_parts[2:]
+        
+        try:
+            # Extract variable names from the template
+            var_names = re.findall(r'\{(\w+)\}', template)
+            # Create dict mapping parameter names to arguments
+            template_vars = dict(zip(var_names, template_args))
+            return template.format(**template_vars), False
+        except KeyError as e:
+            print(f"Error: Missing argument {e}")
+            return '', False
+
+    # Regular query
+    return ' '.join(query_parts), False
 
 def load_config() -> dict:
     config_paths = [CONFIG_FILE, CONFIG_DIR / "config.json"]
