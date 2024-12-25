@@ -85,7 +85,12 @@ Examples:
     server_params = load_mcp_server_config(server_config)
 
     # LangChain tools conversion
-    langchain_tools = await convert_mcp_to_langchain_tools(server_params)
+    toolkits = []
+    langchain_tools = []
+    for server_param in server_params:
+        toolkit = await convert_mcp_to_langchain_tools(server_param)
+        toolkits.append(toolkit)
+        langchain_tools.extend(toolkit.get_tools())
 
     # Handle --list-tools argument
     if args.list_tools:
@@ -180,6 +185,9 @@ Examples:
 
         # Saving the last conversation thread ID
         await conversation_manager.save_id(thread_id, checkpointer.conn)
+
+    for toolkit in toolkits:
+        await toolkit.close()
 
 def parse_query(args: argparse.Namespace) -> tuple[str, bool]:
     """
