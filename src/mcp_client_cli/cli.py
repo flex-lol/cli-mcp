@@ -51,9 +51,25 @@ async def run() -> None:
 
     We convert MCP tools to LangChain tools and pass it to the agent.    
     """
-    parser = argparse.ArgumentParser(description='Run LangChain agent with MCP tools')
+    parser = argparse.ArgumentParser(
+        description='Run LangChain agent with MCP tools',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  llm "What is the capital of France?"     Ask a simple question
+  llm c "tell me more"                     Continue previous conversation
+  llm p review                             Use a prompt template
+  cat file.txt | llm                       Process input from a file
+  llm --list-tools                         Show available tools
+  llm --list-prompts                       Show available prompt templates
+  llm --no-confirmations "search web"      Run tools without confirmation
+        """
+    )
     parser.add_argument('query', nargs='*', default=[],
-                       help='The query to process (default: read from stdin or use default query)')
+                       help='The query to process (default: read from stdin). '
+                            'Special prefixes:\n'
+                            '  c: Continue previous conversation\n'
+                            '  p: Use prompt template')
     parser.add_argument('--list-tools', action='store_true',
                        help='List all available LLM tools')
     parser.add_argument('--list-prompts', action='store_true',
