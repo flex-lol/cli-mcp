@@ -12,6 +12,7 @@ from typing import Annotated, TypedDict
 import uuid
 import sys
 import re
+import anyio
 import commentjson
 from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, AIMessageChunk
 from langchain_core.prompts import ChatPromptTemplate
@@ -76,6 +77,8 @@ Examples:
                        help='List all available prompts')
     parser.add_argument('--no-confirmations', action='store_true',
                        help='Bypass tool confirmation requirements')
+    parser.add_argument('--force-refresh', action='store_true',
+                       help='Force refresh of tools capabilities')
 
     args = parser.parse_args()
 
@@ -87,10 +90,15 @@ Examples:
     # LangChain tools conversion
     toolkits = []
     langchain_tools = []
-    for server_param in server_params:
-        toolkit = await convert_mcp_to_langchain_tools(server_param)
+    # Convert tools in parallel
+    async def convert_toolkit(server_param):
+        toolkit = await convert_mcp_to_langchain_tools(server_param, args.force_refresh)
         toolkits.append(toolkit)
         langchain_tools.extend(toolkit.get_tools())
+
+    async with anyio.create_task_group() as tg:
+        for server_param in server_params:
+            tg.start_soon(convert_toolkit, server_param)
 
     # Handle --list-tools argument
     if args.list_tools:

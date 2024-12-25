@@ -27,9 +27,9 @@ class McpToolkit(BaseToolkit):
         await self._session.initialize()
         return self._session
 
-    async def initialize(self):
+    async def initialize(self, force_refresh: bool = False):
         cached_tools = get_cached_tools(self.server_param)
-        if  cached_tools:
+        if  cached_tools and not force_refresh:
             for tool in cached_tools:
                 self._tools.append(create_langchain_tool(tool, self._session, self))
             return
@@ -107,7 +107,7 @@ def create_langchain_tool(
     )
 
 
-async def convert_mcp_to_langchain_tools(server_param: StdioServerParameters) -> McpToolkit:
+async def convert_mcp_to_langchain_tools(server_param: StdioServerParameters, force_refresh: bool = False) -> McpToolkit:
     """Convert MCP tools to LangChain tools.
     
     Args:
@@ -117,5 +117,5 @@ async def convert_mcp_to_langchain_tools(server_param: StdioServerParameters) ->
         List[BaseTool]: A list of converted LangChain tools.
     """
     toolkit = McpToolkit(server_param=server_param)
-    await toolkit.initialize()
+    await toolkit.initialize(force_refresh=force_refresh)
     return toolkit
