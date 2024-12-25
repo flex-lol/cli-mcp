@@ -27,6 +27,18 @@ $ cat instructions.txt | llm
 The capital city of North Sumatra is Medan.
 ```
 
+### Using Prompt Templates
+
+You can use predefined prompt templates by using the `p` prefix followed by the template name and its arguments:
+
+```bash
+# List available prompt templates
+$ llm --list-prompts
+
+# Use a template
+$ llm p review
+```
+
 ### Triggering a tool
 
 ```bash
@@ -40,6 +52,9 @@ Tool Calls:
     query: site:news.ycombinator.com
     count: 1
 Brave Search MCP Server running on stdio
+
+# If the tool requires confirmation, you'll be prompted:
+Confirm tool call? [y/n]: y
 
 ================================== Ai Message ==================================
 Tool Calls:
@@ -63,6 +78,12 @@ The top article on Hacker News today is:
 You can view the full list of articles on [Hacker News](https://news.ycombinator.com/)
 ```
 
+To bypass tool confirmation requirements, use the `--no-confirmations` flag:
+
+```bash
+$ llm --no-confirmations "What is the top article on hackernews today?"
+```
+
 ### Continuation
 
 Add a `c ` prefix to your message to continue the last conversation.
@@ -72,6 +93,14 @@ $ llm asldkfjasdfkl
 It seems like your message might have been a typo or an error. Could you please clarify or provide more details about what you need help with?
 $ llm c what did i say previously?
 You previously typed "asldkfjasdfkl," which appears to be a random string of characters. If you meant to ask something specific or if you have a question, please let me know!
+```
+
+### List Available Tools
+
+To see all available tools:
+
+```bash
+$ llm --list-tools
 ```
 
 ## Setup
@@ -94,14 +123,16 @@ You previously typed "asldkfjasdfkl," which appears to be a random string of cha
      "mcpServers": {
        "fetch": {
          "command": "uvx",
-         "args": ["mcp-server-fetch"]
+         "args": ["mcp-server-fetch"],
+         "requires_confirmation": ["fetch"]
        },
        "brave-search": {
          "command": "npx",
          "args": ["-y", "@modelcontextprotocol/server-brave-search"],
          "env": {
            "BRAVE_API_KEY": "your-brave-api-key"
-         }
+         },
+         "requires_confirmation": ["brave_web_search"]
        },
        "youtube": {
          "command": "uvx",
@@ -110,6 +141,8 @@ You previously typed "asldkfjasdfkl," which appears to be a random string of cha
      }
    }
    ```
+
+   Note: Use `requires_confirmation` to specify which tools need user confirmation before execution.
 
 3. Run the CLI:
    ```bash
