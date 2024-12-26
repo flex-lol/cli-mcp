@@ -84,31 +84,32 @@ Examples:
 
     query, is_conversation_continuation = parse_query(args)
 
-    server_config = load_config()
-    server_params = load_mcp_server_config(server_config)
+    app_config = load_config()
+    server_configs = load_mcp_server_config(app_config)
 
     # LangChain tools conversion
     toolkits = []
     langchain_tools = []
     # Convert tools in parallel
-    async def convert_toolkit(server_param):
-        toolkit = await convert_mcp_to_langchain_tools(server_param, args.force_refresh)
+    async def convert_toolkit(server_config: McpServerConfig):
+        toolkit = await convert_mcp_to_langchain_tools(server_config, args.force_refresh)
         toolkits.append(toolkit)
         langchain_tools.extend(toolkit.get_tools())
 
     async with anyio.create_task_group() as tg:
-        for server_param in server_params:
+        for server_param in server_configs:
             tg.start_soon(convert_toolkit, server_param)
 
     # Handle --list-tools argument
     if args.list_tools:
         console = Console()
         table = Table(title="Available LLM Tools")
+        table.add_column("Toolkit", style="cyan")
         table.add_column("Tool Name", style="cyan")
         table.add_column("Description", style="green")
 
         for tool in langchain_tools:
-            table.add_row(tool.name, tool.description)
+            table.add_row(tool.toolkit_name, tool.name, tool.description)
 
         console.print(table)
         return
@@ -128,18 +129,18 @@ Examples:
         return
 
     # Model initialization
-    llm_config = server_config.get("llm", {})
+    llm_config = app_config.get("llm", {})
     model = init_chat_model(
         model=llm_config.get("model", "gpt-4o"),
         model_provider=llm_config.get("provider", "openai"),
-        api_key=llm_config.get("api_key", os.getenv("LLM_API_KEY", "")),
+        api_key=llm_config.get("api_key", os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))),
         temperature=llm_config.get("temperature", 0),
         base_url=llm_config.get("base_url")
     )
     
     # Prompt creation
     prompt = ChatPromptTemplate.from_messages([
-        ("system", server_config["systemPrompt"]),
+        ("system", app_config["systemPrompt"]),
         ("placeholder", "{messages}")
     ])
 
@@ -178,7 +179,7 @@ Examples:
                 partial_md = truncate_md_to_fit(md, console.size)
                 live.update(Markdown(partial_md), refresh=True)
 
-                if not args.no_confirmations and is_tool_call_requested(chunk, server_config):
+                if not args.no_confirmations and is_tool_call_requested(chunk, app_config):
                     live.stop()
                     is_confirmed = ask_tool_call_confirmation(md, console)
                     if not is_confirmed:
@@ -255,23 +256,26 @@ def load_config() -> dict:
         config["tools_requires_confirmation"] = tools_requires_confirmation
         return config
 
-def load_mcp_server_config(server_config: dict) -> dict:
+def load_mcp_server_config(server_config: dict) -> list[McpServerConfig]:
     """
     Load the MCP server configuration from key "mcpServers" in the config file.
     """
     server_params = []
-    for config in server_config["mcpServers"].values():
+    for server_name, config in server_config["mcpServers"].items():
         enabled = config.get("enabled", True)
         if not enabled:
             continue
 
         server_params.append(
-            StdioServerParameters(
-                command=config["command"],
-                args=config.get("args", []),
-                env={**config.get("env", {}), **os.environ}
+            McpServerConfig(
+                server_name=server_name,
+                server_param=StdioServerParameters(
+                    command=config["command"],
+                    args=config.get("args", []),
+                    env={**config.get("env", {}), **os.environ}
                 )
             )
+        )
     return server_params
 
 def parse_chunk(chunk: any, md: str) -> str:

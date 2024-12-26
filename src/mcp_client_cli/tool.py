@@ -8,7 +8,23 @@ import pydantic
 
 from .storage import *
 
+class McpServerConfig(BaseModel):
+    """Configuration for an MCP server.
+    
+    This class represents the configuration needed to connect to and identify an MCP server,
+    containing both the server's name and its connection parameters.
+
+    Attributes:
+        server_name (str): The name identifier for this MCP server
+        server_param (StdioServerParameters): Connection parameters for the server, including
+            command, arguments and environment variables
+    """
+    
+    server_name: str
+    server_param: StdioServerParameters
+
 class McpToolkit(BaseToolkit):
+    name: str
     server_param: StdioServerParameters
     _session: Optional[ClientSession] = None
     _tools: List[BaseTool] = []
@@ -78,6 +94,7 @@ def create_langchain_tool(
         BaseTool: The created LangChain tool.
     """
     class McpTool(BaseTool):
+        toolkit_name: str
         name: str
         description: str
         args_schema: Type[BaseModel]
@@ -104,18 +121,20 @@ def create_langchain_tool(
         args_schema=jsonschema_to_pydantic(tool_schema.inputSchema),
         session=session,
         toolkit=toolkit,
+        toolkit_name=toolkit.name,
     )
 
 
-async def convert_mcp_to_langchain_tools(server_param: StdioServerParameters, force_refresh: bool = False) -> McpToolkit:
-    """Convert MCP tools to LangChain tools.
+async def convert_mcp_to_langchain_tools(server_config: McpServerConfig, force_refresh: bool = False) -> McpToolkit:
+    """Convert MCP tools to LangChain tools and create a toolkit.
     
     Args:
-        server_params (List[StdioServerParameters]): A list of server parameters for MCP tools.
+        server_config (McpServerConfig): Configuration for the MCP server including name and parameters.
+        force_refresh (bool, optional): Whether to force refresh the tools cache. Defaults to False.
     
     Returns:
-        List[BaseTool]: A list of converted LangChain tools.
+        McpToolkit: A toolkit containing the converted LangChain tools.
     """
-    toolkit = McpToolkit(server_param=server_param)
+    toolkit = McpToolkit(name=server_config.server_name, server_param=server_config.server_param)
     await toolkit.initialize(force_refresh=force_refresh)
     return toolkit
