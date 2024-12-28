@@ -14,20 +14,18 @@ import sys
 import re
 import anyio
 import commentjson
-from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, AIMessageChunk
+from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.prebuilt import create_react_agent
 from langgraph.managed import IsLastStep
 from langgraph.graph.message import add_messages
 from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from rich.console import Console, ConsoleDimensions
-from rich.live import Live
-from rich.markdown import Markdown
-from rich.prompt import Confirm
+from rich.console import Console
 from rich.table import Table
 
 from .const import *
+from .output import *
 from .storage import *
 from .tool import *
 from .prompt import *
@@ -79,6 +77,8 @@ Examples:
                        help='Bypass tool confirmation requirements')
     parser.add_argument('--force-refresh', action='store_true',
                        help='Force refresh of tools capabilities')
+    parser.add_argument('--text-only', action='store_true',
+                       help='Print output as raw text instead of parsing markdown')
 
     args = parser.parse_args()
 
@@ -135,7 +135,15 @@ Examples:
         model_provider=llm_config.get("provider", "openai"),
         api_key=llm_config.get("api_key", os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))),
         temperature=llm_config.get("temperature", 0),
-        base_url=llm_config.get("base_url")
+        base_url=llm_config.get("base_url"),
+        default_headers={
+            # OpenRouter tracking
+            "X-Title": "mcp-client-cli",
+            "HTTP-Referer": "https://github.com/adhikasp/mcp-client-cli",
+        },
+        extra_body={
+            "transforms": ["middle-out"], 
+        }
     )
     
     # Prompt creation
@@ -167,30 +175,20 @@ Examples:
             "today_datetime": datetime.now().isoformat(),
         }
         # Message streaming and tool calls handling
-        console = Console()
-        md = "Thinking...\n"
-        with Live(Markdown(md), vertical_overflow="visible", screen=True) as live:
-            async for chunk in agent_executor.astream(
-                input_messages,
-                stream_mode=["messages", "values"],
-                config={"configurable": {"thread_id": thread_id}, "recursion_limit": 100}
-            ):
-                md = parse_chunk(chunk, md)
-                partial_md = truncate_md_to_fit(md, console.size)
-                live.update(Markdown(partial_md), refresh=True)
+        output = OutputHandler(text_only=args.text_only)
+        output.start()
 
-                if not args.no_confirmations and is_tool_call_requested(chunk, app_config):
-                    live.stop()
-                    is_confirmed = ask_tool_call_confirmation(md, console)
-                    if not is_confirmed:
-                        md += "# Tool call denied"
-                        break
-                    live.start()
+        async for chunk in agent_executor.astream(
+            input_messages,
+            stream_mode=["messages", "values"],
+            config={"configurable": {"thread_id": thread_id}, "recursion_limit": 100}
+        ):
+            output.update(chunk)
+            if not args.no_confirmations:
+                if not output.confirm_tool_call(app_config, chunk):
+                    break
 
-        console.clear()
-        console.print("\n")
-        console.print(Markdown(md))
-        console.print("\n\n")
+        output.finish()
 
         # Saving the last conversation thread ID
         await conversation_manager.save_id(thread_id, checkpointer.conn)
@@ -278,105 +276,6 @@ def load_mcp_server_config(server_config: dict) -> list[McpServerConfig]:
             )
         )
     return server_params
-
-def parse_chunk(chunk: any, md: str) -> str:
-    """
-    Print the chunk of agent response to the console.
-    It will stream the response to the console as it is received.
-    """
-    # If this is a message chunk
-    if isinstance(chunk, tuple) and chunk[0] == "messages":
-        message_chunk = chunk[1][0]  # Get the message content
-        if isinstance(message_chunk, AIMessageChunk):
-            content = message_chunk.content
-            if isinstance(content, str):
-                md += content
-            elif isinstance(content, list) and len(content) > 0 and isinstance(content[0], dict) and "text" in content[0]:
-                md += content[0]["text"]
-    # If this is a final value
-    elif isinstance(chunk, dict) and "messages" in chunk:
-        # Print a newline after the complete message
-        md += "\n"
-    elif isinstance(chunk, tuple) and chunk[0] == "values":
-        message = chunk[1]['messages'][-1]
-        if isinstance(message, AIMessage) and message.tool_calls:
-            md += "\n\n### Tool Calls:"
-            for tc in message.tool_calls:
-                lines = [
-                    f"  {tc.get('name', 'Tool')}",
-                ]
-                if tc.get("error"):
-                    lines.append(f"```")
-                    lines.append(f"Error: {tc.get('error')}")
-                    lines.append("```")
-
-                lines.append("Args:")
-                lines.append("```")
-                args = tc.get("args")
-                if isinstance(args, str):
-                    lines.append(f"{args}")
-                elif isinstance(args, dict):
-                    for arg, value in args.items():
-                        lines.append(f"{arg}: {value}")
-                lines.append("```")
-                md += "\n".join(lines)
-        md += "\n"
-    return md
-
-def truncate_md_to_fit(md: str, dimensions: ConsoleDimensions) -> str:
-    """
-    Truncate the markdown to fit the console size, with few line safety margin.
-    """
-    lines = md.splitlines()
-    max_lines = dimensions.height - 3  # Safety margin
-    fitted_lines = []
-    current_height = 0
-    code_block_count = 0
-
-    for line in reversed(lines):
-        # Calculate wrapped line height, rounding up for safety
-        line_height = 1 + len(line) // dimensions.width
-
-        if current_height + line_height > max_lines:
-            # If we're breaking in the middle of code blocks, add closing ```
-            if code_block_count % 2 == 1:
-                fitted_lines.insert(0, "```")
-            break
-
-        fitted_lines.insert(0, line)
-        current_height += line_height
-
-        # Track code block markers
-        if line.strip() == "```":
-            code_block_count += 1
-
-    return '\n'.join(fitted_lines) if fitted_lines else ''
-
-def is_tool_call_requested(chunk: any, config: dict) -> bool:
-    """
-    Check if the chunk contains a tool call request and requires confirmation.
-    """
-    if isinstance(chunk, tuple) and chunk[0] == "values":
-        if len(chunk) > 1 and isinstance(chunk[1], dict) and "messages" in chunk[1]:
-            message = chunk[1]['messages'][-1]
-            if isinstance(message, AIMessage) and message.tool_calls:
-                for tc in message.tool_calls:
-                    if tc.get("name") in config["tools_requires_confirmation"]:
-                        return True
-    return False
-
-def ask_tool_call_confirmation(md: str, console: Console) -> bool:
-    """
-    Ask the user for confirmation to run a tool call.
-    """
-    console.set_alt_screen(True)
-    console.print(Markdown(md))
-    console.print(f"\n\n")
-    is_tool_call_confirmed = Confirm.ask(f"Confirm tool call?", console=console)
-    console.set_alt_screen(False)
-    if not is_tool_call_confirmed:
-        return False
-    return True
 
 def main() -> None:
     """Entry point of the script."""
