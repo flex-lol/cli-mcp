@@ -18,14 +18,17 @@ class McpServerConfig(BaseModel):
         server_name (str): The name identifier for this MCP server
         server_param (StdioServerParameters): Connection parameters for the server, including
             command, arguments and environment variables
+        exclude_tools (list[str]): List of tool names to exclude from this server
     """
     
     server_name: str
     server_param: StdioServerParameters
+    exclude_tools: list[str] = []
 
 class McpToolkit(BaseToolkit):
     name: str
     server_param: StdioServerParameters
+    exclude_tools: list[str] = []
     _session: Optional[ClientSession] = None
     _tools: List[BaseTool] = []
     _client = None
@@ -47,6 +50,8 @@ class McpToolkit(BaseToolkit):
         cached_tools = get_cached_tools(self.server_param)
         if  cached_tools and not force_refresh:
             for tool in cached_tools:
+                if tool.name in self.exclude_tools:
+                    continue
                 self._tools.append(create_langchain_tool(tool, self._session, self))
             return
 
@@ -55,6 +60,8 @@ class McpToolkit(BaseToolkit):
             tools: types.ListToolsResult = await self._session.list_tools()
             save_tools_cache(self.server_param, tools.tools)
             for tool in tools.tools:
+                if tool.name in self.exclude_tools:
+                    continue
                 self._tools.append(create_langchain_tool(tool, self._session, self))
         except Exception as e:
             print(f"Error gathering tools for {self.server_param.command} {' '.join(self.server_param.args)}: {e}")
@@ -135,6 +142,10 @@ async def convert_mcp_to_langchain_tools(server_config: McpServerConfig, force_r
     Returns:
         McpToolkit: A toolkit containing the converted LangChain tools.
     """
-    toolkit = McpToolkit(name=server_config.server_name, server_param=server_config.server_param)
+    toolkit = McpToolkit(
+        name=server_config.server_name, 
+        server_param=server_config.server_param,
+        exclude_tools=server_config.exclude_tools
+    )
     await toolkit.initialize(force_refresh=force_refresh)
     return toolkit

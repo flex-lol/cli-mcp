@@ -273,7 +273,8 @@ def load_mcp_server_config(server_config: dict) -> list[McpServerConfig]:
                     command=config["command"],
                     args=config.get("args", []),
                     env={**config.get("env", {}), **os.environ}
-                )
+                ),
+                exclude_tools=config.get("exclude_tools", [])
             )
         )
     return server_params
