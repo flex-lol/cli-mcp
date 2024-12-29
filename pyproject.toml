@@ -21,6 +21,9 @@ dependencies = [
     "rich>=13.9.0",
     "commentjson>=0.9.0",
     "jsonschema-pydantic>=0.6",
+    # Required to suppress annoying gemini grpc log
+    # See https://stackoverflow.com/questions/78780089/how-do-i-get-rid-of-the-annoying-terminal-warning-when-using-gemini-api
+    "grpcio==1.60.1",
 ]
 authors = [
     { name = "Adhika Setya Pramudita", email = "adhika.setya.p@gmail.com" }
