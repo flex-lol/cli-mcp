@@ -216,6 +216,7 @@ async def handle_conversation(args: argparse.Namespace, query: str,
     async with AsyncSqliteSaver.from_conn_string(SQLITE_DB) as checkpointer:
         store = SqliteStore(SQLITE_DB)
         memories = await get_memories(store)
+        formatted_memories = "\n".join(f"- {memory}" for memory in memories)
         agent_executor = create_react_agent(
             model, tools, state_schema=AgentState, 
             state_modifier=prompt, checkpointer=checkpointer, store=store
@@ -227,7 +228,7 @@ async def handle_conversation(args: argparse.Namespace, query: str,
         input_messages = AgentState(
             messages=[HumanMessage(content=query)], 
             today_datetime=datetime.now().isoformat(),
-            memories=memories,
+            memories=formatted_memories,
         )
 
         output = OutputHandler(text_only=args.text_only)
