@@ -4,8 +4,8 @@ from langchain_core.tools import BaseTool, BaseToolkit, ToolException
 from mcp import StdioServerParameters, types, ClientSession
 from mcp.client.stdio import stdio_client
 import pydantic
-from pydantic.json_schema import JsonSchemaValue
-from pydantic_core import core_schema as cs
+from pydantic_core import to_json
+from jsonschema_pydantic import jsonschema_to_pydantic
 
 from .storage import *
 
@@ -106,15 +106,10 @@ class McpTool(BaseTool):
             self.session = await self.toolkit._start_session()
 
         result = await self.session.call_tool(self.name, arguments=kwargs)
+        content = to_json(result.content).decode()
         if result.isError:
-            raise ToolException(result.content)
-        return result.content
-    
-    @override
-    @property
-    def tool_call_schema(self) -> type[pydantic.BaseModel]:
-        assert self.args_schema is not None  # noqa: S101
-        return self.args_schema
+            raise ToolException(content)
+        return content
 
 def create_langchain_tool(
     tool_schema: types.Tool,
@@ -133,7 +128,7 @@ def create_langchain_tool(
     return McpTool(
         name=tool_schema.name,
         description=tool_schema.description,
-        args_schema=create_schema_model(tool_schema.inputSchema),
+        args_schema=jsonschema_to_pydantic(tool_schema.inputSchema),
         session=session,
         toolkit=toolkit,
         toolkit_name=toolkit.name,
@@ -157,19 +152,3 @@ async def convert_mcp_to_langchain_tools(server_config: McpServerConfig, force_r
     )
     await toolkit.initialize(force_refresh=force_refresh)
     return toolkit
-
-def create_schema_model(schema: dict[str, Any]) -> type[pydantic.BaseModel]:
-    # Create a new model class that returns our JSON schema.
-    # LangChain requires a BaseModel class.
-    # Credit to https://github.com/rectalogic/langchain-mcp/blob/main/src/langchain_mcp/toolkit.py
-    class Schema(pydantic.BaseModel):
-        model_config = pydantic.ConfigDict(extra="allow")
-
-        @override
-        @classmethod
-        def __get_pydantic_json_schema__(
-            cls, core_schema: cs.CoreSchema, handler: pydantic.GetJsonSchemaHandler
-        ) -> JsonSchemaValue:
-            return schema
-
-    return Schema

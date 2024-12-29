@@ -190,6 +190,9 @@ async def handle_conversation(args: argparse.Namespace, query: str,
     ]
     toolkits, tools = await load_tools(server_configs, args.no_tools, args.force_refresh)
     
+    extra_body = {}
+    if app_config.llm.base_url and "openrouter" in app_config.llm.base_url:
+        extra_body = {"transforms": ["middle-out"]}
     model = init_chat_model(
         model=app_config.llm.model,
         model_provider=app_config.llm.provider,
@@ -200,7 +203,7 @@ async def handle_conversation(args: argparse.Namespace, query: str,
             "X-Title": "mcp-client-cli",
             "HTTP-Referer": "https://github.com/adhikasp/mcp-client-cli",
         },
-        extra_body={"transforms": ["middle-out"]}
+        extra_body=extra_body
     )
 
     prompt = ChatPromptTemplate.from_messages([
