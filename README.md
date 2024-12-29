@@ -38,7 +38,9 @@ You can use predefined prompt templates by using the `p` prefix followed by the 
 $ llm --list-prompts
 
 # Use a template
-$ llm p review
+$ llm p review  # Review git changes
+$ llm p commit  # Generate commit message
+$ llm p yt url=https://youtube.com/...  # Summarize YouTube video
 ```
 
 ### Triggering a tool
@@ -97,12 +99,15 @@ $ llm c what did i say previously?
 You previously typed "asldkfjasdfkl," which appears to be a random string of characters. If you meant to ask something specific or if you have a question, please let me know!
 ```
 
-### List Available Tools
-
-To see all available tools:
+### Additional Options
 
 ```bash
-$ llm --list-tools
+$ llm --list-tools                # List all available tools
+$ llm --list-prompts              # List available prompt templates
+$ llm --no-tools                  # Run without any tools
+$ llm --force-refresh             # Force refresh tool capabilities cache
+$ llm --text-only                 # Output raw text without markdown formatting
+$ llm --show-memories             # Show user memories
 ```
 
 ## Setup
@@ -118,15 +123,18 @@ $ llm --list-tools
      "systemPrompt": "You are an AI assistant helping a software engineer...",
      "llm": {
        "provider": "openai",
-       "model": "gpt-4o-mini",
+       "model": "gpt-4",
        "api_key": "your-openai-api-key",
-       "temperature": 0.7
+       "temperature": 0.7,
+       "base_url": "https://api.openai.com/v1"  // Optional, for OpenRouter or other providers
      },
      "mcpServers": {
        "fetch": {
          "command": "uvx",
          "args": ["mcp-server-fetch"],
-         "requires_confirmation": ["fetch"]
+         "requires_confirmation": ["fetch"],
+         "enabled": true,  // Optional, defaults to true
+         "exclude_tools": []  // Optional, list of tool names to exclude
        },
        "brave-search": {
          "command": "npx",
@@ -144,7 +152,11 @@ $ llm --list-tools
    }
    ```
 
-   Note: Use `requires_confirmation` to specify which tools need user confirmation before execution.
+   Note: 
+   - Use `requires_confirmation` to specify which tools need user confirmation before execution
+   - The LLM API key can also be set via environment variables `LLM_API_KEY` or `OPENAI_API_KEY`
+   - The config file can be placed in either `~/.llm/config.json` or `$PWD/.llm/config.json`
+   - You can comment the JSON config file with `//` if you like to switch around the configuration
 
 3. Run the CLI:
    ```bash
