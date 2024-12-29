@@ -13,7 +13,6 @@ import uuid
 import sys
 import re
 import anyio
-import commentjson
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.prebuilt import create_react_agent
@@ -30,6 +29,7 @@ from .storage import *
 from .tool import *
 from .prompt import *
 from .memory import *
+from .config import AppConfig
 
 # The AgentState class is used to maintain the state of the agent during a conversation.
 class AgentState(TypedDict):
@@ -42,17 +42,28 @@ class AgentState(TypedDict):
     # The user's memories.
     memories: str = "no memories"
 
-
 async def run() -> None:
-    """
-    Run the LLM agent.
-    This function initializes the agent, loads the configuration, and processes the query.
+    """Run the LLM agent."""
+    args = setup_argument_parser()
+    query, is_conversation_continuation = parse_query(args)
+    app_config = AppConfig.load()
+    
+    if args.list_tools:
+        await handle_list_tools(app_config, args)
+        return
+    
+    if args.show_memories:
+        await handle_show_memories()
+        return
+        
+    if args.list_prompts:
+        handle_list_prompts()
+        return
+        
+    await handle_conversation(args, query, is_conversation_continuation, app_config)
 
-    We mainly rely on ReAct agent to do tool calling. See here for more detail on how the agent works:
-    https://langchain-ai.github.io/langgraph/how-tos/create-react-agent/
-
-    We convert MCP tools to LangChain tools and pass it to the agent.    
-    """
+def setup_argument_parser() -> argparse.Namespace:
+    """Setup and return the argument parser."""
     parser = argparse.ArgumentParser(
         description='Run LangChain agent with MCP tools',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -86,111 +97,129 @@ Examples:
                        help='Do not add any tools')
     parser.add_argument('--show-memories', action='store_true',
                        help='Show user memories')
+    return parser.parse_args()
 
-    args = parser.parse_args()
+async def handle_list_tools(app_config: AppConfig, args: argparse.Namespace) -> None:
+    """Handle the --list-tools command."""
+    server_configs = [
+        McpServerConfig(
+            server_name=name,
+            server_param=StdioServerParameters(
+                command=config.command,
+                args=config.args or [],
+                env={**(config.env or {}), **os.environ}
+            ),
+            exclude_tools=config.exclude_tools or []
+        )
+        for name, config in app_config.get_enabled_servers().items()
+    ]
+    toolkits, tools = await load_tools(server_configs, args.no_tools, args.force_refresh)
+    
+    console = Console()
+    table = Table(title="Available LLM Tools")
+    table.add_column("Toolkit", style="cyan")
+    table.add_column("Tool Name", style="cyan")
+    table.add_column("Description", style="green")
 
-    query, is_conversation_continuation = parse_query(args)
+    for tool in tools:
+        if isinstance(tool, McpTool):
+            table.add_row(tool.toolkit_name, tool.name, tool.description)
 
-    app_config = load_config()
-    server_configs = load_mcp_server_config(app_config)
+    console.print(table)
 
-    # LangChain tools conversion
+    for toolkit in toolkits:
+        await toolkit.close()
+
+async def handle_show_memories() -> None:
+    """Handle the --show-memories command."""
+    store = SqliteStore(SQLITE_DB)
+    memories = await get_memories(store)
+    console = Console()
+    table = Table(title="My LLM Memories")
+    for memory in memories:
+        table.add_row(memory)
+    console.print(table)
+
+def handle_list_prompts() -> None:
+    """Handle the --list-prompts command."""
+    console = Console()
+    table = Table(title="Available Prompt Templates")
+    table.add_column("Name", style="cyan")
+    table.add_column("Template")
+    table.add_column("Arguments")
+    
+    for name, template in prompt_templates.items():
+        table.add_row(name, template, ", ".join(re.findall(r'\{(\w+)\}', template)))
+        
+    console.print(table)
+
+async def load_tools(server_configs: list[McpServerConfig], no_tools: bool, force_refresh: bool) -> tuple[list, list]:
+    """Load and convert MCP tools to LangChain tools."""
+    if no_tools:
+        return []
+        
     toolkits = []
     langchain_tools = []
+    
     async def convert_toolkit(server_config: McpServerConfig):
-        if args.no_tools:
-            return
-        toolkit = await convert_mcp_to_langchain_tools(server_config, args.force_refresh)
+        toolkit = await convert_mcp_to_langchain_tools(server_config, force_refresh)
         toolkits.append(toolkit)
         langchain_tools.extend(toolkit.get_tools())
 
     async with anyio.create_task_group() as tg:
         for server_param in server_configs:
             tg.start_soon(convert_toolkit, server_param)
-
-    # Handle --list-tools argument
-    if args.list_tools:
-        console = Console()
-        table = Table(title="Available LLM Tools")
-        table.add_column("Toolkit", style="cyan")
-        table.add_column("Tool Name", style="cyan")
-        table.add_column("Description", style="green")
-
-        for tool in langchain_tools:
-            table.add_row(tool.toolkit_name, tool.name, tool.description)
-
-        console.print(table)
-        return
-    
-    if args.show_memories:
-        store = SqliteStore(SQLITE_DB)
-        memories = await get_memories(store)
-        console = Console()
-        table = Table(title="My LLM Memories")
-        for memory in memories:
-            table.add_row(memory)
-        console.print(table)
-        return
-
-    langchain_tools.append(save_memory)
-
-    # Handle --list-prompts argument
-    if args.list_prompts:
-        console = Console()
-        table = Table(title="Available Prompt Templates")
-        table.add_column("Name", style="cyan")
-        table.add_column("Template")
-        table.add_column("Arguments")
-        
-        for name, template in prompt_templates.items():
-            table.add_row(name, template, ", ".join(re.findall(r'\{(\w+)\}', template)))
             
-        console.print(table)
-        return
+    langchain_tools.append(save_memory)
+    return toolkits, langchain_tools
 
-    # Model initialization
-    llm_config = app_config.get("llm", {})
+async def handle_conversation(args: argparse.Namespace, query: str, 
+                            is_conversation_continuation: bool, app_config: AppConfig) -> None:
+    """Handle the main conversation flow."""
+    server_configs = [
+        McpServerConfig(
+            server_name=name,
+            server_param=StdioServerParameters(
+                command=config.command,
+                args=config.args or [],
+                env={**(config.env or {}), **os.environ}
+            ),
+            exclude_tools=config.exclude_tools or []
+        )
+        for name, config in app_config.get_enabled_servers().items()
+    ]
+    toolkits, tools = await load_tools(server_configs, args.no_tools, args.force_refresh)
+    
     model = init_chat_model(
-        model=llm_config.get("model", "gpt-4o"),
-        model_provider=llm_config.get("provider", "openai"),
-        api_key=llm_config.get("api_key", os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))),
-        temperature=llm_config.get("temperature", 0),
-        base_url=llm_config.get("base_url"),
+        model=app_config.llm.model,
+        model_provider=app_config.llm.provider,
+        api_key=app_config.llm.api_key,
+        temperature=app_config.llm.temperature,
+        base_url=app_config.llm.base_url,
         default_headers={
-            # OpenRouter tracking
             "X-Title": "mcp-client-cli",
             "HTTP-Referer": "https://github.com/adhikasp/mcp-client-cli",
         },
-        extra_body={
-            "transforms": ["middle-out"], 
-        }
+        extra_body={"transforms": ["middle-out"]}
     )
 
-    # Prompt creation
     prompt = ChatPromptTemplate.from_messages([
-        ("system", app_config["systemPrompt"]),
+        ("system", app_config.system_prompt),
         ("placeholder", "{messages}")
     ])
 
-    # Conversation manager initialization
     conversation_manager = ConversationManager(SQLITE_DB)
     
     async with AsyncSqliteSaver.from_conn_string(SQLITE_DB) as checkpointer:
         store = SqliteStore(SQLITE_DB)
-        memories = ", ".join(await get_memories(store))
+        memories = await get_memories(store)
         agent_executor = create_react_agent(
-            model, 
-            langchain_tools, 
-            state_schema=AgentState, 
-            state_modifier=prompt,
-            checkpointer=checkpointer,
-            store=store,
+            model, tools, state_schema=AgentState, 
+            state_modifier=prompt, checkpointer=checkpointer, store=store
         )
         
-        if is_conversation_continuation:
-            thread_id = await conversation_manager.get_last_id()
-        else:
-            thread_id = uuid.uuid4().hex
+        thread_id = (await conversation_manager.get_last_id() if is_conversation_continuation 
+                    else uuid.uuid4().hex)
 
         input_messages = AgentState(
             messages=[HumanMessage(content=query)], 
@@ -198,25 +227,24 @@ Examples:
             memories=memories,
         )
 
-        # Message streaming and tool calls handling
         output = OutputHandler(text_only=args.text_only)
         output.start()
         try:
             async for chunk in agent_executor.astream(
                 input_messages,
                 stream_mode=["messages", "values"],
-                config={"configurable": {"thread_id": thread_id, "user_id": "myself"}, "recursion_limit": 100}
+                config={"configurable": {"thread_id": thread_id, "user_id": "myself"}, 
+                       "recursion_limit": 100}
             ):
                 output.update(chunk)
                 if not args.no_confirmations:
-                    if not output.confirm_tool_call(app_config, chunk):
+                    if not output.confirm_tool_call(app_config.__dict__, chunk):
                         break
         except Exception as e:
             output.update_error(e)
         finally:
             output.finish()
 
-        # Saving the last conversation thread ID
         await conversation_manager.save_id(thread_id, checkpointer.conn)
 
     for toolkit in toolkits:
@@ -262,46 +290,6 @@ def parse_query(args: argparse.Namespace) -> tuple[str, bool]:
 
     # Regular query
     return ' '.join(query_parts), False
-
-def load_config() -> dict:
-    config_paths = [CONFIG_FILE, CONFIG_DIR / "config.json"]
-    choosen_path = None
-    for path in config_paths:
-        if os.path.exists(path):
-            choosen_path = path
-    if choosen_path is None:
-        raise FileNotFoundError(f"Could not find config file in any of: {', '.join(config_paths)}")
-
-    with open(choosen_path, 'r') as f:
-        config = commentjson.load(f)
-        tools_requires_confirmation = []
-        for tool in config["mcpServers"]:
-            tools_requires_confirmation.extend(config["mcpServers"][tool].get("requires_confirmation", []))
-        config["tools_requires_confirmation"] = tools_requires_confirmation
-        return config
-
-def load_mcp_server_config(server_config: dict) -> list[McpServerConfig]:
-    """
-    Load the MCP server configuration from key "mcpServers" in the config file.
-    """
-    server_params = []
-    for server_name, config in server_config["mcpServers"].items():
-        enabled = config.get("enabled", True)
-        if not enabled:
-            continue
-
-        server_params.append(
-            McpServerConfig(
-                server_name=server_name,
-                server_param=StdioServerParameters(
-                    command=config["command"],
-                    args=config.get("args", []),
-                    env={**config.get("env", {}), **os.environ}
-                ),
-                exclude_tools=config.get("exclude_tools", [])
-            )
-        )
-    return server_params
 
 def main() -> None:
     """Entry point of the script."""

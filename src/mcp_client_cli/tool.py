@@ -86,6 +86,29 @@ class McpToolkit(BaseToolkit):
     def get_tools(self) -> List[BaseTool]:
         return self._tools
 
+
+class McpTool(BaseTool):
+    toolkit_name: str
+    name: str
+    description: str
+    args_schema: Type[BaseModel]
+    session: Optional[ClientSession]
+    toolkit: McpToolkit
+
+    handle_tool_error: bool = True
+
+    def _run(self, **kwargs):
+        raise NotImplementedError("Only async operations are supported")
+
+    async def _arun(self, **kwargs):
+        if not self.session:
+            self.session = await self.toolkit._start_session()
+
+        result = await self.session.call_tool(self.name, arguments=kwargs)
+        if result.isError:
+            raise ToolException(result.content)
+        return result.content
+
 def create_langchain_tool(
     tool_schema: types.Tool,
     session: ClientSession,
@@ -100,28 +123,6 @@ def create_langchain_tool(
     Returns:
         BaseTool: The created LangChain tool.
     """
-    class McpTool(BaseTool):
-        toolkit_name: str
-        name: str
-        description: str
-        args_schema: Type[BaseModel]
-        session: Optional[ClientSession]
-        toolkit: McpToolkit
-
-        handle_tool_error: bool = True
-
-        def _run(self, **kwargs):
-            raise NotImplementedError("Only async operations are supported")
-
-        async def _arun(self, **kwargs):
-            if not self.session:
-                self.session = await self.toolkit._start_session()
-
-            result = await self.session.call_tool(self.name, arguments=kwargs)
-            if result.isError:
-                raise ToolException(result.content)
-            return result.content
-    
     return McpTool(
         name=tool_schema.name,
         description=tool_schema.description,
