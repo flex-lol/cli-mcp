@@ -6,6 +6,7 @@ from mcp.client.stdio import stdio_client
 import pydantic
 from pydantic_core import to_json
 from jsonschema_pydantic import jsonschema_to_pydantic
+import asyncio
 
 from .storage import *
 
@@ -33,23 +34,32 @@ class McpToolkit(BaseToolkit):
     _session: Optional[ClientSession] = None
     _tools: List[BaseTool] = []
     _client = None
+    _init_lock: asyncio.Lock = None
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
+    def __init__(self, **data):
+        super().__init__(**data)
+        self._init_lock = asyncio.Lock()
+
     async def _start_session(self):
-        if self._session:
+        async with self._init_lock:
+            if self._session:
+                return self._session
+
+            self._client = stdio_client(self.server_param)
+            read, write = await self._client.__aenter__()
+            self._session = ClientSession(read, write)
+            await self._session.__aenter__()
+            await self._session.initialize()
             return self._session
 
-        self._client = stdio_client(self.server_param)
-        read, write = await self._client.__aenter__()
-        self._session = ClientSession(read, write)
-        await self._session.__aenter__()
-        await self._session.initialize()
-        return self._session
-
     async def initialize(self, force_refresh: bool = False):
+        if self._tools and not force_refresh:
+            return
+
         cached_tools = get_cached_tools(self.server_param)
-        if  cached_tools and not force_refresh:
+        if cached_tools and not force_refresh:
             for tool in cached_tools:
                 if tool.name in self.exclude_tools:
                     continue

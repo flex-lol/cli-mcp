@@ -106,7 +106,7 @@ class OutputHandler:
                     elif isinstance(args, dict):
                         for arg, value in args.items():
                             lines.append(f"{arg}: {value}")
-                    lines.append("```")
+                    lines.append("```\n")
                     md += "\n".join(lines)
             elif isinstance(message, ToolMessage) and message.status != "success":
                 md += "Failed call with error:"
