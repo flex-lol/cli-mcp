@@ -16,6 +16,7 @@ from langchain_core.embeddings import Embeddings
 from langgraph.prebuilt import InjectedStore
 from langgraph.store.base import BaseStore
 from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import tool
 
 from langgraph.store.base import (
     BaseStore,
@@ -37,6 +38,7 @@ from langgraph.store.base import (
 logger = logging.getLogger(__name__)
         
 
+@tool
 async def save_memory(memory: str, *, config: RunnableConfig, store: Annotated[BaseStore, InjectedStore()]) -> str:
     '''Save the given memory for the current user.'''
     user_id = config.get("configurable", {}).get("user_id")
