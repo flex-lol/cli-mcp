@@ -10,14 +10,12 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
-import uuid
 
 import aiosqlite
 from langchain_core.embeddings import Embeddings
 from langgraph.prebuilt import InjectedStore
 from langgraph.store.base import BaseStore
 from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import tool
 
 from langgraph.store.base import (
     BaseStore,
@@ -39,15 +37,12 @@ from langgraph.store.base import (
 logger = logging.getLogger(__name__)
         
 
-@tool
-async def save_memory(memories: List[str], *, config: RunnableConfig, store: Annotated[BaseStore, InjectedStore()]) -> str:
-    '''Save the given memory for the current user. Do not save duplicate memories.'''
+async def save_memory(memory: str, *, config: RunnableConfig, store: Annotated[BaseStore, InjectedStore()]) -> str:
+    '''Save the given memory for the current user.'''
     user_id = config.get("configurable", {}).get("user_id")
     namespace = ("memories", user_id)
-    for memory in memories:
-        id = uuid.uuid4().hex
-        await store.aput(namespace, f"memory_{id}", {"data": memory})
-    return f"Saved memories: {memories}"
+    await store.aput(namespace, f"memory_{len(await store.asearch(namespace))}", {"data": memory})
+    return f"Saved memory: {memory}"
 
 async def get_memories(store: BaseStore, user_id: str = "myself", query: str = None) -> List[str]:
     namespace = ("memories", user_id)

@@ -29,6 +29,7 @@ from .output import *
 from .storage import *
 from .tool import *
 from .prompt import *
+from .memory import *
 
 # The AgentState class is used to maintain the state of the agent during a conversation.
 class AgentState(TypedDict):
@@ -38,6 +39,8 @@ class AgentState(TypedDict):
     is_last_step: IsLastStep
     # The current date and time, used for context in the conversation.
     today_datetime: str
+    # The user's memories.
+    memories: str = "no memories"
 
 
 async def run() -> None:
@@ -81,6 +84,8 @@ Examples:
                        help='Print output as raw text instead of parsing markdown')
     parser.add_argument('--no-tools', action='store_true',
                        help='Do not add any tools')
+    parser.add_argument('--show-memories', action='store_true',
+                       help='Show user memories')
 
     args = parser.parse_args()
 
@@ -116,6 +121,18 @@ Examples:
 
         console.print(table)
         return
+    
+    if args.show_memories:
+        store = SqliteStore(SQLITE_DB)
+        memories = await get_memories(store)
+        console = Console()
+        table = Table(title="My LLM Memories")
+        for memory in memories:
+            table.add_row(memory)
+        console.print(table)
+        return
+
+    langchain_tools.append(save_memory)
 
     # Handle --list-prompts argument
     if args.list_prompts:
@@ -148,7 +165,7 @@ Examples:
             "transforms": ["middle-out"], 
         }
     )
-    
+
     # Prompt creation
     prompt = ChatPromptTemplate.from_messages([
         ("system", app_config["systemPrompt"]),
@@ -159,13 +176,15 @@ Examples:
     conversation_manager = ConversationManager(SQLITE_DB)
     
     async with AsyncSqliteSaver.from_conn_string(SQLITE_DB) as checkpointer:
-        # Agent executor creation
+        store = SqliteStore(SQLITE_DB)
+        memories = ", ".join(await get_memories(store))
         agent_executor = create_react_agent(
             model, 
             langchain_tools, 
             state_schema=AgentState, 
             state_modifier=prompt,
-            checkpointer=checkpointer
+            checkpointer=checkpointer,
+            store=store,
         )
         
         if is_conversation_continuation:
@@ -173,19 +192,20 @@ Examples:
         else:
             thread_id = uuid.uuid4().hex
 
-        input_messages = {
-            "messages": [HumanMessage(content=query)], 
-            "today_datetime": datetime.now().isoformat(),
-        }
+        input_messages = AgentState(
+            messages=[HumanMessage(content=query)], 
+            today_datetime=datetime.now().isoformat(),
+            memories=memories,
+        )
+
         # Message streaming and tool calls handling
         output = OutputHandler(text_only=args.text_only)
         output.start()
-
         try:
             async for chunk in agent_executor.astream(
                 input_messages,
                 stream_mode=["messages", "values"],
-                config={"configurable": {"thread_id": thread_id}, "recursion_limit": 100}
+                config={"configurable": {"thread_id": thread_id, "user_id": "myself"}, "recursion_limit": 100}
             ):
                 output.update(chunk)
                 if not args.no_confirmations:
