@@ -1,4 +1,4 @@
-from langchain_core.messages import BaseMessage, AIMessage, AIMessageChunk
+from langchain_core.messages import BaseMessage, AIMessage, AIMessageChunk, ToolMessage
 from rich.console import Console, ConsoleDimensions
 from rich.live import Live
 from rich.markdown import Markdown
@@ -108,6 +108,9 @@ class OutputHandler:
                             lines.append(f"{arg}: {value}")
                     lines.append("```")
                     md += "\n".join(lines)
+            elif isinstance(message, ToolMessage) and message.status != "success":
+                md += "Failed call with error:"
+                md += f"\n\n{message.content}"
             md += "\n"
         return md
 
