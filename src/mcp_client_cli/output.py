@@ -8,7 +8,10 @@ class OutputHandler:
     def __init__(self, text_only: bool = False):
         self.console = Console()
         self.text_only = text_only
-        self.md = "Thinking...\n"
+        if self.text_only:
+            self.md = ""
+        else:
+            self.md = "Thinking...\n"
         self._live = None
 
     def start(self):
@@ -25,6 +28,16 @@ class OutputHandler:
         self.md = self._parse_chunk(chunk, self.md)
         if self.text_only:
             self.console.print(self._parse_chunk(chunk), end="")
+        else:
+            if self.md.startswith("Thinking...") and not self.md.strip("Thinking...").isspace():
+                self.md = self.md.strip("Thinking...").strip()
+            partial_md = self._truncate_md_to_fit(self.md, self.console.size)
+            self._live.update(Markdown(partial_md), refresh=True)
+
+    def update_error(self, error: Exception):
+        self.md += f"Error: {error}"
+        if self.text_only:
+            self.console.print(self.md)
         else:
             partial_md = self._truncate_md_to_fit(self.md, self.console.size)
             self._live.update(Markdown(partial_md), refresh=True)
@@ -51,9 +64,7 @@ class OutputHandler:
         self.stop()
         if not self.text_only:
             self.console.clear()
-            self.console.print("\n")
             self.console.print(Markdown(self.md))
-            self.console.print("\n\n")
 
     def _parse_chunk(self, chunk: any, md: str = "") -> str:
         """

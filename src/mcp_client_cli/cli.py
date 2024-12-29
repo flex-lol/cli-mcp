@@ -79,6 +79,8 @@ Examples:
                        help='Force refresh of tools capabilities')
     parser.add_argument('--text-only', action='store_true',
                        help='Print output as raw text instead of parsing markdown')
+    parser.add_argument('--no-tools', action='store_true',
+                       help='Do not add any tools')
 
     args = parser.parse_args()
 
@@ -90,8 +92,9 @@ Examples:
     # LangChain tools conversion
     toolkits = []
     langchain_tools = []
-    # Convert tools in parallel
     async def convert_toolkit(server_config: McpServerConfig):
+        if args.no_tools:
+            return
         toolkit = await convert_mcp_to_langchain_tools(server_config, args.force_refresh)
         toolkits.append(toolkit)
         langchain_tools.extend(toolkit.get_tools())
@@ -178,17 +181,20 @@ Examples:
         output = OutputHandler(text_only=args.text_only)
         output.start()
 
-        async for chunk in agent_executor.astream(
-            input_messages,
-            stream_mode=["messages", "values"],
-            config={"configurable": {"thread_id": thread_id}, "recursion_limit": 100}
-        ):
-            output.update(chunk)
-            if not args.no_confirmations:
-                if not output.confirm_tool_call(app_config, chunk):
-                    break
-
-        output.finish()
+        try:
+            async for chunk in agent_executor.astream(
+                input_messages,
+                stream_mode=["messages", "values"],
+                config={"configurable": {"thread_id": thread_id}, "recursion_limit": 100}
+            ):
+                output.update(chunk)
+                if not args.no_confirmations:
+                    if not output.confirm_tool_call(app_config, chunk):
+                        break
+        except Exception as e:
+            output.update_error(e)
+        finally:
+            output.finish()
 
         # Saving the last conversation thread ID
         await conversation_manager.save_id(thread_id, checkpointer.conn)
