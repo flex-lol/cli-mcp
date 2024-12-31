@@ -156,7 +156,7 @@ def handle_list_prompts() -> None:
 async def load_tools(server_configs: list[McpServerConfig], no_tools: bool, force_refresh: bool) -> tuple[list, list]:
     """Load and convert MCP tools to LangChain tools."""
     if no_tools:
-        return [], []
+        return [], None
         
     toolkits = []
     langchain_tools = []
@@ -260,16 +260,22 @@ def parse_query(args: argparse.Namespace) -> tuple[str, bool]:
     Returns a tuple of (query, is_conversation_continuation).
     """
     query_parts = ' '.join(args.query).split()
+    stdin_content = ""
+
+    # Check if there's input from pipe
+    if not sys.stdin.isatty():
+        stdin_content = sys.stdin.read().strip() + "\n\n"
 
     # No arguments provided
     if not query_parts:
-        if not sys.stdin.isatty():
-            return sys.stdin.read().strip(), False
+        if stdin_content:
+            return stdin_content.strip(), False
         return '', False
 
     # Check for conversation continuation
     if query_parts[0] == 'c':
-        return ' '.join(query_parts[1:]), True
+        query = ' '.join(query_parts[1:])
+        return stdin_content + query, True
 
     # Check for prompt template
     if query_parts[0] == 'p' and len(query_parts) >= 2:
@@ -287,13 +293,13 @@ def parse_query(args: argparse.Namespace) -> tuple[str, bool]:
             var_names = re.findall(r'\{(\w+)\}', template)
             # Create dict mapping parameter names to arguments
             template_vars = dict(zip(var_names, template_args))
-            return template.format(**template_vars), False
+            return stdin_content + template.format(**template_vars), False
         except KeyError as e:
             print(f"Error: Missing argument {e}")
             return '', False
 
     # Regular query
-    return ' '.join(query_parts), False
+    return stdin_content + ' '.join(query_parts), False
 
 def main() -> None:
     """Entry point of the script."""

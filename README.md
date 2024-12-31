@@ -25,8 +25,9 @@ You can also pipe input from other commands or files:
 $ echo "What is the capital city of North Sumatra?" | llm
 The capital city of North Sumatra is Medan.
 
-$ cat instructions.txt | llm
-The capital city of North Sumatra is Medan.
+$ echo "Given a location, tell me its capital city." > instructions.txt
+$ cat instruction.txt | llm "West Java"
+The capital city of West Java is Bandung.
 ```
 
 ### Using Prompt Templates
