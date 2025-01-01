@@ -1,6 +1,7 @@
 import io
 import platform
 import subprocess
+import base64
 
 def get_clipboard_content() -> tuple[str | bytes, str | None] | None:
     """Get content from clipboard, handling both text and images in native and WSL environments.
