@@ -23,6 +23,9 @@ from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from rich.console import Console
 from rich.table import Table
+import base64
+import imghdr
+import mimetypes
 
 from .const import *
 from .output import *
@@ -174,7 +177,7 @@ async def load_tools(server_configs: list[McpServerConfig], no_tools: bool, forc
     langchain_tools.append(save_memory)
     return toolkits, langchain_tools
 
-async def handle_conversation(args: argparse.Namespace, query: str, 
+async def handle_conversation(args: argparse.Namespace, query: HumanMessage, 
                             is_conversation_continuation: bool, app_config: AppConfig) -> None:
     """Handle the main conversation flow."""
     server_configs = [
@@ -227,7 +230,7 @@ async def handle_conversation(args: argparse.Namespace, query: str,
                     else uuid.uuid4().hex)
 
         input_messages = AgentState(
-            messages=[HumanMessage(content=query)], 
+            messages=[query], 
             today_datetime=datetime.now().isoformat(),
             memories=formatted_memories,
         )
@@ -255,52 +258,74 @@ async def handle_conversation(args: argparse.Namespace, query: str,
     for toolkit in toolkits:
         await toolkit.close()
 
-def parse_query(args: argparse.Namespace) -> tuple[str, bool]:
+def parse_query(args: argparse.Namespace) -> tuple[HumanMessage, bool]:
     """
     Parse the query from command line arguments.
-    Returns a tuple of (query, is_conversation_continuation).
+    Returns a tuple of (HumanMessage, is_conversation_continuation).
     """
     query_parts = ' '.join(args.query).split()
     stdin_content = ""
+    stdin_image = None
+    is_continuation = False
 
     # Check if there's input from pipe
     if not sys.stdin.isatty():
-        stdin_content = sys.stdin.read().strip() + "\n\n"
+        stdin_data = sys.stdin.buffer.read()
+        # Try to detect if it's an image
+        image_type = imghdr.what(None, h=stdin_data)
+        if image_type:
+            # It's an image, encode it as base64
+            stdin_image = base64.b64encode(stdin_data).decode('utf-8')
+            mime_type = mimetypes.guess_type(f"dummy.{image_type}")[0] or f"image/{image_type}"
+        else:
+            # It's text
+            stdin_content = stdin_data.decode('utf-8').strip()
 
-    # No arguments provided
-    if not query_parts:
-        if stdin_content:
-            return stdin_content.strip(), False
-        return '', False
+    # Process the query text
+    query_text = ""
+    if query_parts:
+        if query_parts[0] == 'c':
+            is_continuation = True
+            query_text = ' '.join(query_parts[1:])
+        elif query_parts[0] == 'p' and len(query_parts) >= 2:
+            template_name = query_parts[1]
+            if template_name not in prompt_templates:
+                print(f"Error: Prompt template '{template_name}' not found.")
+                print("Available templates:", ", ".join(prompt_templates.keys()))
+                return HumanMessage(content=""), False
 
-    # Check for conversation continuation
-    if query_parts[0] == 'c':
-        query = ' '.join(query_parts[1:])
-        return stdin_content + query, True
+            template = prompt_templates[template_name]
+            template_args = query_parts[2:]
+            try:
+                # Extract variable names from the template
+                var_names = re.findall(r'\{(\w+)\}', template)
+                # Create dict mapping parameter names to arguments
+                template_vars = dict(zip(var_names, template_args))
+                query_text = template.format(**template_vars)
+            except KeyError as e:
+                print(f"Error: Missing argument {e}")
+                return HumanMessage(content=""), False
+        else:
+            query_text = ' '.join(query_parts)
 
-    # Check for prompt template
-    if query_parts[0] == 'p' and len(query_parts) >= 2:
-        template_name = query_parts[1]
-        if template_name not in prompt_templates:
-            print(f"Error: Prompt template '{template_name}' not found.")
-            print("Available templates:", ", ".join(prompt_templates.keys()))
-            return '', False
+    # Combine stdin content with query text if both exist
+    if stdin_content and query_text:
+        query_text = f"{stdin_content}\n\n{query_text}"
+    elif stdin_content:
+        query_text = stdin_content
+    elif not query_text and not stdin_image:
+        return HumanMessage(content=""), False
 
-        template = prompt_templates[template_name]
-        template_args = query_parts[2:]
-        
-        try:
-            # Extract variable names from the template
-            var_names = re.findall(r'\{(\w+)\}', template)
-            # Create dict mapping parameter names to arguments
-            template_vars = dict(zip(var_names, template_args))
-            return stdin_content + template.format(**template_vars), False
-        except KeyError as e:
-            print(f"Error: Missing argument {e}")
-            return '', False
+    # Create the message content
+    if stdin_image:
+        content = [
+            {"type": "text", "text": query_text or "What do you see in this image?"},
+            {"type": "image_url", "image_url": f"data:{mime_type};base64,{stdin_image}"}
+        ]
+    else:
+        content = query_text
 
-    # Regular query
-    return stdin_content + ' '.join(query_parts), False
+    return HumanMessage(content=content), is_continuation
 
 def main() -> None:
     """Entry point of the script."""

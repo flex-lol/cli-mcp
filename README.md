@@ -30,6 +30,20 @@ $ cat instruction.txt | llm "West Java"
 The capital city of West Java is Bandung.
 ```
 
+### Image Input
+
+You can pipe image files to analyze them with multimodal LLMs:
+
+```bash
+$ cat image.jpg | llm "What do you see in this image?"
+[LLM will analyze and describe the image]
+
+$ cat screenshot.png | llm "Is there any error in this screenshot?"
+[LLM will analyze the screenshot and point out any errors]
+```
+
+The CLI automatically detects if the piped input is an image and handles it appropriately.
+
 ### Using Prompt Templates
 
 You can use predefined prompt templates by using the `p` prefix followed by the template name and its arguments:
