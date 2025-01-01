@@ -15,6 +15,7 @@ import re
 import anyio
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.language_models.chat_models import BaseChatModel
 from langgraph.prebuilt import create_react_agent
 from langgraph.managed import IsLastStep
 from langgraph.graph.message import add_messages
@@ -193,7 +194,7 @@ async def handle_conversation(args: argparse.Namespace, query: str,
     extra_body = {}
     if app_config.llm.base_url and "openrouter" in app_config.llm.base_url:
         extra_body = {"transforms": ["middle-out"]}
-    model = init_chat_model(
+    model: BaseChatModel = init_chat_model(
         model=app_config.llm.model,
         model_provider=app_config.llm.provider,
         api_key=app_config.llm.api_key,

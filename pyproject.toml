@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp_client_cli"
-version = "0.2.0"
+version = "0.2.1"
 description = "Command line interface for MCP client"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -15,15 +15,12 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "langgraph>=0.2.53",
     "langchain-openai>=0.2.10",
-    # "langchain-google-genai>=2.0.7",
+    "langchain-google-genai>=2.0.7",
     "aiosqlite>=0.20.0",
     "langgraph-checkpoint-sqlite>=2.0.1",
     "rich>=13.9.0",
     "commentjson>=0.9.0",
     "jsonschema-pydantic>=0.6",
-    # Required to suppress annoying gemini grpc log
-    # See https://stackoverflow.com/questions/78780089/how-do-i-get-rid-of-the-annoying-terminal-warning-when-using-gemini-api
-    # "grpcio==1.60.1",
 ]
 authors = [
     { name = "Adhika Setya Pramudita", email = "adhika.setya.p@gmail.com" }
