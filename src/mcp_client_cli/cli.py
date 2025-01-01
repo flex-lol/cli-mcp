@@ -161,7 +161,7 @@ def handle_list_prompts() -> None:
 async def load_tools(server_configs: list[McpServerConfig], no_tools: bool, force_refresh: bool) -> tuple[list, list]:
     """Load and convert MCP tools to LangChain tools."""
     if no_tools:
-        return [], None
+        return [], []
         
     toolkits = []
     langchain_tools = []
