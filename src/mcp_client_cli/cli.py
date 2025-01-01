@@ -336,7 +336,7 @@ def parse_query(args: argparse.Namespace) -> tuple[HumanMessage, bool]:
     if stdin_image:
         content = [
             {"type": "text", "text": query_text or "What do you see in this image?"},
-            {"type": "image_url", "image_url": f"data:{mime_type};base64,{stdin_image}"}
+            {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{stdin_image}"}}
         ]
     else:
         content = query_text
