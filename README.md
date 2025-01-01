@@ -42,8 +42,6 @@ $ cat screenshot.png | llm "Is there any error in this screenshot?"
 [LLM will analyze the screenshot and point out any errors]
 ```
 
-The CLI automatically detects if the piped input is an image and handles it appropriately.
-
 ### Using Prompt Templates
 
 You can use predefined prompt templates by using the `p` prefix followed by the template name and its arguments:
@@ -113,6 +111,47 @@ It seems like your message might have been a typo or an error. Could you please 
 $ llm c what did i say previously?
 You previously typed "asldkfjasdfkl," which appears to be a random string of characters. If you meant to ask something specific or if you have a question, please let me know!
 ```
+
+### Clipboard Support
+
+You can use content from your clipboard using the `cb` command:
+
+```bash
+# After copying text to clipboard
+$ llm cb
+[LLM will process the clipboard text]
+
+$ llm cb "What language is this code written in?"
+[LLM will analyze the clipboard text with your question]
+
+# After copying an image to clipboard
+$ llm cb "What do you see in this image?"
+[LLM will analyze the clipboard image]
+
+# You can combine it with continuation
+$ llm cb c "Tell me more about what you see"
+[LLM will continue the conversation about the clipboard content]
+```
+
+The clipboard feature works in:
+- Native Windows/macOS/Linux environments
+  - Windows: Uses PowerShell
+  - macOS: Uses `pbpaste` for text, `pngpaste` for images (optional)
+  - Linux: Uses `xclip` (required for clipboard support)
+- Windows Subsystem for Linux (WSL)
+  - Accesses the Windows clipboard through PowerShell
+  - Works with both text and images
+  - Make sure you have access to `powershell.exe` from WSL
+
+Required tools for clipboard support:
+- Windows: PowerShell (built-in)
+- macOS: 
+  - `pbpaste` (built-in) for text
+  - `pngpaste` (optional) for images: `brew install pngpaste`
+- Linux: 
+  - `xclip`: `sudo apt install xclip` or equivalent
+
+The CLI automatically detects if the clipboard content is text or image and handles it appropriately.
 
 ### Additional Options
 

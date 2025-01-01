@@ -27,6 +27,7 @@ import base64
 import imghdr
 import mimetypes
 
+from .input import *
 from .const import *
 from .output import *
 from .storage import *
@@ -268,8 +269,23 @@ def parse_query(args: argparse.Namespace) -> tuple[HumanMessage, bool]:
     stdin_image = None
     is_continuation = False
 
+    # Handle clipboard content if requested
+    if query_parts and query_parts[0] == 'cb':
+        # Remove 'cb' from query parts
+        query_parts = query_parts[1:]
+        # Try to get content from clipboard
+        clipboard_result = get_clipboard_content()
+        if clipboard_result:
+            content, mime_type = clipboard_result
+            if mime_type:  # It's an image
+                stdin_image = base64.b64encode(content).decode('utf-8')
+            else:  # It's text
+                stdin_content = content
+        else:
+            print("No content found in clipboard")
+            raise Exception("Clipboard is empty")
     # Check if there's input from pipe
-    if not sys.stdin.isatty():
+    elif not sys.stdin.isatty():
         stdin_data = sys.stdin.buffer.read()
         # Try to detect if it's an image
         image_type = imghdr.what(None, h=stdin_data)

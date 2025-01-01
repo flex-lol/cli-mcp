@@ -1,7 +1,6 @@
 import io
 import platform
 import subprocess
-import base64
 
 def get_clipboard_content() -> tuple[str | bytes, str | None] | None:
     """Get content from clipboard, handling both text and images in native and WSL environments.
@@ -62,8 +61,7 @@ def get_clipboard_content() -> tuple[str | bytes, str | None] | None:
             if result.stdout:
                 return result.stdout.strip(), None
         except FileNotFoundError:
-            # pngpaste not installed
-            print("Error: pngpaste not installed. Install it with 'brew install pngpaste' for image clipboard support")
+            # pngpaste not installed, try text only
             try:
                 result = subprocess.run(['pbpaste'], capture_output=True, text=True)
                 if result.stdout:
