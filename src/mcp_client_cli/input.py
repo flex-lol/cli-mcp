@@ -62,7 +62,8 @@ def get_clipboard_content() -> tuple[str | bytes, str | None] | None:
             if result.stdout:
                 return result.stdout.strip(), None
         except FileNotFoundError:
-            # pngpaste not installed, try text only
+            # pngpaste not installed
+            print("Error: pngpaste not installed. Install it with 'brew install pngpaste' for image clipboard support")
             try:
                 result = subprocess.run(['pbpaste'], capture_output=True, text=True)
                 if result.stdout:
