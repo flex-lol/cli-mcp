@@ -101,6 +101,15 @@ To bypass tool confirmation requirements, use the `--no-confirmations` flag:
 $ llm --no-confirmations "What is the top article on hackernews today?"
 ```
 
+To use in bash scripts, add the --no-intermediates, so it doesn't print intermediate messages, only the concluding end message.
+```bash
+$ llm --no-intermediates "What is the time in Tokyo right now?"
+```
+
+```bash
+$ llm --no-confirmations "What is the top article on hackernews today?"
+```
+
 ### Continuation
 
 Add a `c ` prefix to your message to continue the last conversation.

@@ -46,6 +46,7 @@ class AgentState(TypedDict):
     today_datetime: str
     # The user's memories.
     memories: str = "no memories"
+    remaining_steps: int = 5
 
 async def run() -> None:
     """Run the LLM agent."""
@@ -100,6 +101,8 @@ Examples:
                        help='Print output as raw text instead of parsing markdown')
     parser.add_argument('--no-tools', action='store_true',
                        help='Do not add any tools')
+    parser.add_argument('--no-intermediates', action='store_true',
+                       help='Only print the final message')
     parser.add_argument('--show-memories', action='store_true',
                        help='Show user memories')
     return parser.parse_args()
@@ -234,9 +237,10 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
             messages=[query], 
             today_datetime=datetime.now().isoformat(),
             memories=formatted_memories,
+            remaining_steps=3
         )
 
-        output = OutputHandler(text_only=args.text_only)
+        output = OutputHandler(text_only=args.text_only, only_last_message=args.no_intermediates)
         output.start()
         try:
             async for chunk in agent_executor.astream(
