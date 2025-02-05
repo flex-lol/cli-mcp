@@ -106,10 +106,6 @@ To use in bash scripts, add the --no-intermediates, so it doesn't print intermed
 $ llm --no-intermediates "What is the time in Tokyo right now?"
 ```
 
-```bash
-$ llm --no-confirmations "What is the top article on hackernews today?"
-```
-
 ### Continuation
 
 Add a `c ` prefix to your message to continue the last conversation.
@@ -171,6 +167,7 @@ $ llm --no-tools                  # Run without any tools
 $ llm --force-refresh             # Force refresh tool capabilities cache
 $ llm --text-only                 # Output raw text without markdown formatting
 $ llm --show-memories             # Show user memories
+$ llm --model gpt-4               # Override the model specified in config
 ```
 
 ## Setup

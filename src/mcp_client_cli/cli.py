@@ -105,6 +105,8 @@ Examples:
                        help='Only print the final message')
     parser.add_argument('--show-memories', action='store_true',
                        help='Show user memories')
+    parser.add_argument('--model',
+                       help='Override the model specified in config')
     return parser.parse_args()
 
 async def handle_list_tools(app_config: AppConfig, args: argparse.Namespace) -> None:
@@ -201,6 +203,10 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
     extra_body = {}
     if app_config.llm.base_url and "openrouter" in app_config.llm.base_url:
         extra_body = {"transforms": ["middle-out"]}
+    # Override model if specified in command line
+    if args.model:
+        app_config.llm.model = args.model
+        
     model: BaseChatModel = init_chat_model(
         model=app_config.llm.model,
         model_provider=app_config.llm.provider,
