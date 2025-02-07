@@ -43,12 +43,12 @@ class OutputHandler:
     def update_error(self, error: Exception):
         import traceback
         error = f"Error: {error}\n\nStack trace:\n```\n{traceback.format_exc()}```"
-        self.md += error;
+        self.md += error
         if(self.only_last_message):
             self.console.print(error)
-            return;
+            return
         if self.text_only:
-            self.console.print_exception(self.md)
+            self.console.print_exception()
         else:
             partial_md = self._truncate_md_to_fit(self.md, self.console.size)
             self._live.update(Markdown(partial_md), refresh=True)
