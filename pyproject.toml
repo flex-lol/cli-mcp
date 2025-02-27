@@ -27,6 +27,7 @@ dependencies = [
     "jsonschema-pydantic>=0.6",
     "pywin32>=306; sys_platform == 'win32' or platform_system == 'Windows'",
     "langgraph-prebuilt>=0.1.0",
+    "standard-imghdr>=3.13.0",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
