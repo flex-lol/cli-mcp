@@ -24,7 +24,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from rich.console import Console
 from rich.table import Table
 import base64
-import standard_imghdr as imghdr
+import imghdr as imghdr
 import mimetypes
 
 from .input import *
