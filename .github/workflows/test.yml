@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +39,12 @@ jobs:
           iwr -useb https://astral.sh/uv/install.ps1 | iex
           echo "$HOME\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+      - name: Install uv (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
       - name: Create virtual environment (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -50,6 +56,12 @@ jobs:
         run: |
           uv venv
           echo "$PWD\.venv\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Create virtual environment (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          uv venv
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
       - name: Install package
         run: |
@@ -87,3 +99,19 @@ jobs:
             Write-Host $output
             exit 1
           }
+
+      - name: Verify CLI works (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # Run the help command and capture output
+          output=$(llm --help)
+          
+          # Check if the output contains expected help text
+          if [[ "$output" == *"Run LangChain agent with MCP tools"* ]]; then
+            echo "CLI help command works correctly"
+          else
+            echo "CLI help command failed to produce expected output"
+            echo "Actual output:"
+            echo "$output"
+            exit 1
+          fi
