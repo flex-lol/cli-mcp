@@ -8,6 +8,59 @@ This act as alternative client beside Claude Desktop. Additionally you can use a
 
 ![C4 Diagram](https://raw.githubusercontent.com/adhikasp/mcp-client-cli/refs/heads/master/c4_diagram.png)
 
+## Setup
+
+1. Install via pip:
+   ```bash
+   pip install mcp-client-cli
+   ```
+
+2. Create a `~/.llm/config.json` file to configure your LLM and MCP servers:
+   ```json
+   {
+     "systemPrompt": "You are an AI assistant helping a software engineer...",
+     "llm": {
+       "provider": "openai",
+       "model": "gpt-4",
+       "api_key": "your-openai-api-key",
+       "temperature": 0.7,
+       "base_url": "https://api.openai.com/v1"  // Optional, for OpenRouter or other providers
+     },
+     "mcpServers": {
+       "fetch": {
+         "command": "uvx",
+         "args": ["mcp-server-fetch"],
+         "requires_confirmation": ["fetch"],
+         "enabled": true,  // Optional, defaults to true
+         "exclude_tools": []  // Optional, list of tool names to exclude
+       },
+       "brave-search": {
+         "command": "npx",
+         "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+         "env": {
+           "BRAVE_API_KEY": "your-brave-api-key"
+         },
+         "requires_confirmation": ["brave_web_search"]
+       },
+       "youtube": {
+         "command": "uvx",
+         "args": ["--from", "git+https://github.com/adhikasp/mcp-youtube", "mcp-youtube"]
+       }
+     }
+   }
+   ```
+
+   Note: 
+   - Use `requires_confirmation` to specify which tools need user confirmation before execution
+   - The LLM API key can also be set via environment variables `LLM_API_KEY` or `OPENAI_API_KEY`
+   - The config file can be placed in either `~/.llm/config.json` or `$PWD/.llm/config.json`
+   - You can comment the JSON config file with `//` if you like to switch around the configuration
+
+3. Run the CLI:
+   ```bash
+   llm "What is the capital city of North Sumatra?"
+   ```
+
 ## Usage
 
 ### Basic Usage
@@ -169,59 +222,6 @@ $ llm --text-only                 # Output raw text without markdown formatting
 $ llm --show-memories             # Show user memories
 $ llm --model gpt-4               # Override the model specified in config
 ```
-
-## Setup
-
-1. Clone the repository:
-   ```bash
-   pip install git+https://github.com/adhikasp/mcp-client-cli.git
-   ```
-
-2. Create a `~/.llm/config.json` file to configure your LLM and MCP servers:
-   ```json
-   {
-     "systemPrompt": "You are an AI assistant helping a software engineer...",
-     "llm": {
-       "provider": "openai",
-       "model": "gpt-4",
-       "api_key": "your-openai-api-key",
-       "temperature": 0.7,
-       "base_url": "https://api.openai.com/v1"  // Optional, for OpenRouter or other providers
-     },
-     "mcpServers": {
-       "fetch": {
-         "command": "uvx",
-         "args": ["mcp-server-fetch"],
-         "requires_confirmation": ["fetch"],
-         "enabled": true,  // Optional, defaults to true
-         "exclude_tools": []  // Optional, list of tool names to exclude
-       },
-       "brave-search": {
-         "command": "npx",
-         "args": ["-y", "@modelcontextprotocol/server-brave-search"],
-         "env": {
-           "BRAVE_API_KEY": "your-brave-api-key"
-         },
-         "requires_confirmation": ["brave_web_search"]
-       },
-       "youtube": {
-         "command": "uvx",
-         "args": ["--from", "git+https://github.com/adhikasp/mcp-youtube", "mcp-youtube"]
-       }
-     }
-   }
-   ```
-
-   Note: 
-   - Use `requires_confirmation` to specify which tools need user confirmation before execution
-   - The LLM API key can also be set via environment variables `LLM_API_KEY` or `OPENAI_API_KEY`
-   - The config file can be placed in either `~/.llm/config.json` or `$PWD/.llm/config.json`
-   - You can comment the JSON config file with `//` if you like to switch around the configuration
-
-3. Run the CLI:
-   ```bash
-   llm "What is the capital city of North Sumatra?"
-   ```
 
 ## Contributing
 
