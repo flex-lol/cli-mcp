@@ -43,7 +43,9 @@ jobs:
       - name: Get version
         id: get_version
         run: |
-          echo "VERSION=$(python setup.py --version)" >> $GITHUB_OUTPUT
+          source .venv/bin/activate
+          uv pip install tomli
+          echo "VERSION=$(python -c 'import tomli; print(tomli.load(open("pyproject.toml", "rb"))["project"]["version"])')" >> $GITHUB_OUTPUT
 
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
