@@ -3,7 +3,7 @@ name: Release to PyPI
 on:
   push:
     branches:
-      - main
+      - master
     paths-ignore:
       - '**.md'
       - '.gitignore'
@@ -26,13 +26,18 @@ jobs:
       - name: Install uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
+          uv venv
+          source .venv/bin/activate
 
       - name: Install build dependencies
         run: |
+          source .venv/bin/activate
           uv pip install build twine
 
       - name: Build package
-        run: python -m build
+        run: |
+          source .venv/bin/activate
+          python -m build
 
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1 

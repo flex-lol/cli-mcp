@@ -6,7 +6,7 @@ You can use any [MCP-compatible servers](https://github.com/punkpeye/awesome-mcp
 
 This act as alternative client beside Claude Desktop. Additionally you can use any LLM provider like OpenAI, Groq, or local LLM model via [llama](https://github.com/ggerganov/llama.cpp).
 
-![C4 Diagram](c4_diagram.png)
+![C4 Diagram](https://raw.githubusercontent.com/adhikasp/mcp-client-cli/refs/heads/master/c4_diagram.png)
 
 ## Usage
 
