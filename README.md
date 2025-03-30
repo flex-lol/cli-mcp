@@ -50,7 +50,8 @@ This act as alternative client beside Claude Desktop. Additionally you can use a
    }
    ```
 
-   Note: 
+   Note:
+   - See [CONFIG.md](CONFIG.md) for complete documentation of the configuration format
    - Use `requires_confirmation` to specify which tools need user confirmation before execution
    - The LLM API key can also be set via environment variables `LLM_API_KEY` or `OPENAI_API_KEY`
    - The config file can be placed in either `~/.llm/config.json` or `$PWD/.llm/config.json`
