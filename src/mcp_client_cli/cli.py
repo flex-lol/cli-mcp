@@ -266,8 +266,8 @@ async def handle_conversation(args: argparse.Namespace, query: HumanMessage,
 
         await conversation_manager.save_id(thread_id, checkpointer.conn)
 
-    # for toolkit in toolkits:
-    #     await toolkit.close()
+    for toolkit in toolkits:
+        await toolkit.close()
 
 def parse_query(args: argparse.Namespace) -> tuple[HumanMessage, bool]:
     """
