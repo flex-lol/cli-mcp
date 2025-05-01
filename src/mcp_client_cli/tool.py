@@ -87,9 +87,9 @@ class McpToolkit(BaseToolkit):
                         # Create a new task to handle cleanup in the correct context
                         await asyncio.create_task(self._session.__aexit__(None, None, None))
                 except asyncio.TimeoutError:
-                    print(f"Session cleanup for {self.name} timed out")
+                    pass
                 except Exception as e:
-                    print(f"Error during session cleanup for {self.name}: {e}")
+                    pass
         finally:
             try:
                 if self._client:
@@ -99,9 +99,9 @@ class McpToolkit(BaseToolkit):
                             # Create a new task to handle cleanup in the correct context
                             await asyncio.create_task(self._client.__aexit__(None, None, None))
                     except asyncio.TimeoutError:
-                        print(f"Client cleanup for {self.name} timed out")
+                        pass
                     except Exception as e:
-                        print(f"Error during client cleanup for {self.name}: {e}")
+                        pass
             except:
                 pass
 
