@@ -18,6 +18,7 @@ from langchain_openai import ChatOpenAI
 from jsonschema_pydantic import jsonschema_to_pydantic
 import argparse
 
+# Load environment variables from .env file
 dotenv.load_dotenv()
 
 def create_langchain_tool(tool_schema: types.Tool, session: ClientSession, server_params: StdioServerParameters) -> Type[BaseTool]:
@@ -53,6 +54,7 @@ def create_langchain_tool(tool_schema: types.Tool, session: ClientSession, serve
     
     return McpConvertedLangchainTool()
 
+
 async def convert_mcp_to_langchain_tools(server_params: List[StdioServerParameters]) -> List[BaseTool]:
     """Convert MCP tools to LangChain tools based on given server parameters"""
     langchain_tools = []
@@ -68,6 +70,7 @@ async def convert_mcp_to_langchain_tools(server_params: List[StdioServerParamete
                     langchain_tools.append(tool_class)
                 
     return langchain_tools
+
 
 async def run():
     # Add argument parser
@@ -100,36 +103,12 @@ async def run():
                 "PATH": os.getenv("PATH")
             }
         ),
-        # All below server are not working
-        # StdioServerParameters(
-        #     command="npx",
-        #     args=["-y", "@modelcontextprotocol/server-puppeteer"],
-        #     env={
-        #         "PATH": os.getenv("PATH"),
-        #         "DISPLAY": os.getenv("DISPLAY"),
-        #     }
-        # ),
-        # StdioServerParameters(
-        #     command="/usr/bin/npx",
-        #     args=["-y", "@modelcontextprotocol/server-memory"],
-        #     env={
-        #         "PATH": os.getenv("PATH")
-        #     }
-        # ),
-        # StdioServerParameters(
-        #     command="/usr/bin/npx",
-        #     args=["-y", "@modelcontextprotocol/server-github"],
-        #     env={
-        #         "GITHUB_PERSONAL_ACCESS_TOKEN": os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN"),
-        #         "PATH": os.getenv("PATH")
-        #     }
-        # ),
     ]
 
+    # Convert MCP tools to LangChain tools
     langchain_tools = await convert_mcp_to_langchain_tools(server_params)
     
-    # model = ChatAnthropic(model="claude-3-haiku-20240307")
-    # model = ChatAnthropic(model="claude-3-5-sonnet-latest")
+    # Initialize model and memory
     model = ChatOpenAI(model="gpt-4o-mini")
     memory = MemorySaver()
     agent_executor = create_react_agent(model, langchain_tools, checkpointer=memory)
@@ -144,6 +123,7 @@ async def run():
             message.pretty_print()
         else:
             message.pretty_print()
+
 
 if __name__ == "__main__":
     import asyncio
