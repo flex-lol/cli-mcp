@@ -2,7 +2,7 @@
 
 A simple CLI program to run LLM prompt and implement [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) client.
 
-You can use any [MCP-compatible servers](https://github.com/punkpeye/awesome-mcp-servers) from the convenience of your terminal.
+You can use any [MCP-compatible servers](https://github.com/modelcontextprotocol/servers) from the convenience of your terminal.
 
 This act as alternative client beside Claude Desktop. Additionally you can use any LLM provider like OpenAI, Groq, or local LLM model via [llama](https://github.com/ggerganov/llama.cpp).
 
