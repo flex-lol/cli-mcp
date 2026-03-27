@@ -224,7 +224,7 @@ $ llm --show-memories             # Show user memories
 $ llm --model gpt-4               # Override the model specified in config
 ```
 ## License  <a name="license"></a>
-This project is licensed under the **MIT**. See the [LICENSE](LICENSE) file for details. 
+This project is licensed under the **Apache**. See the [LICENSE](LICENSE) file for details. 
 
 ## Contributing
 
